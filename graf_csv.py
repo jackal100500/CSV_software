@@ -20,38 +20,34 @@ class MultiParameterPlotApp:
         self.datetime_column = None
         self.colors = ['red', 'green', 'white', 'cyan', 'magenta', 'yellow']
         
-        # Создание фрейма для загрузки данных
-        self.data_frame = ttk.LabelFrame(root, text="Управление данными")
-        self.data_frame.pack(fill="x", padx=10, pady=5)
-        
-        # Кнопка загрузки данных
-        self.load_button = ttk.Button(self.data_frame, text="Загрузить файл", command=self.load_data)
-        self.load_button.pack(side="left", padx=5, pady=5)
-        
         # Создание фрейма для временного диапазона
         self.time_frame = ttk.LabelFrame(root, text="Временной диапазон")
         self.time_frame.pack(fill="x", padx=10, pady=5)
         
-        # Поля для ввода временного диапазона
-        ttk.Label(self.time_frame, text="Начало:").grid(row=0, column=0, padx=5, pady=5)
-        self.start_date_entry = ttk.Entry(self.time_frame, width=20)
-        self.start_date_entry.grid(row=0, column=1, padx=5, pady=5)
+        # Кнопка загрузки данных (теперь в временном фрейме)
+        self.load_button = ttk.Button(self.time_frame, text="Загрузить файл", command=self.load_data)
+        self.load_button.grid(row=0, column=0, padx=5, pady=5)
         
-        ttk.Label(self.time_frame, text="Конец:").grid(row=0, column=2, padx=5, pady=5)
+        # Поля для ввода временного диапазона
+        ttk.Label(self.time_frame, text="Начало:").grid(row=0, column=1, padx=5, pady=5)
+        self.start_date_entry = ttk.Entry(self.time_frame, width=20)
+        self.start_date_entry.grid(row=0, column=2, padx=5, pady=5)
+        
+        ttk.Label(self.time_frame, text="Конец:").grid(row=0, column=3, padx=5, pady=5)
         self.end_date_entry = ttk.Entry(self.time_frame, width=20)
-        self.end_date_entry.grid(row=0, column=3, padx=5, pady=5)
+        self.end_date_entry.grid(row=0, column=4, padx=5, pady=5)
         
         # Кнопка применения временного диапазона
         self.apply_time_button = ttk.Button(self.time_frame, text="Применить", command=self.update_time_range)
-        self.apply_time_button.grid(row=0, column=4, padx=5, pady=5)
+        self.apply_time_button.grid(row=0, column=5, padx=5, pady=5)
         
         # Кнопка сброса временного диапазона
         self.reset_time_button = ttk.Button(self.time_frame, text="Сбросить", command=self.reset_time_range)
-        self.reset_time_button.grid(row=0, column=5, padx=5, pady=5)
+        self.reset_time_button.grid(row=0, column=6, padx=5, pady=5)
         
         # Предустановленные временные диапазоны
         self.time_presets_frame = ttk.Frame(self.time_frame)
-        self.time_presets_frame.grid(row=1, column=0, columnspan=6, padx=5, pady=5)
+        self.time_presets_frame.grid(row=1, column=0, columnspan=7, padx=5, pady=5)
         
         ttk.Button(self.time_presets_frame, text="Последний час", 
                   command=lambda: self.set_time_preset(hours=1)).pack(side="left", padx=5)
