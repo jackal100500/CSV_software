@@ -112,7 +112,8 @@ class MultiParameterPlotApp:
     def load_data(self):
         """Загрузка данных из файла"""
         file_path = filedialog.askopenfilename(
-            filetypes=[("CSV files", "*.csv"), ("Excel files", "*.xlsx;*.xls")]
+                # filetypes=[("CSV files", "*.csv"), ("Excel files", "*.xlsx;*.xls")]  # старая строка
+                filetypes=[("Excel files", "*.xlsx;*.xls")]  # только Excel файлы
         )
         
         if not file_path:
