@@ -11,8 +11,19 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolb
 class MultiParameterPlotApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("Визуализация нескольких параметров")
+        self.root.title("Multi-Parameter Data Analyzer")
         self.root.geometry("1200x850")
+        
+        # Создание меню
+        menubar = tk.Menu(root)
+        root.config(menu=menubar)
+        
+        # Меню "Справка"
+        help_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="Help", menu=help_menu)
+        help_menu.add_command(label="About", command=self.show_about)
+        help_menu.add_separator()
+        help_menu.add_command(label="GitHub", command=self.open_github)
         
         # Настройка стилей
         style = ttk.Style()
@@ -148,10 +159,14 @@ class MultiParameterPlotApp:
         self.canvas.mpl_connect('button_release_event', self.on_button_release)
         
         # Регулировка пространства для осей
-        plt.subplots_adjust(right=0.85)  # Освобождает место для осей справа
+        plt.subplots_adjust(
+            top=0.95,        # Увеличиваем до 0.95 (меньше места сверху)
+            right=0.85,      # Освобождает место для осей справа
+            bottom=0.15      # Место для оси X с датами
+        )
 
-        # Автоматически подстраиваем компоновку
-        self.fig.tight_layout()
+        # Автоматически подстраиваем компоновку с минимальными отступами
+        self.fig.tight_layout(pad=0.5)  # Уменьшенный отступ (было по умолчанию ~3.0)
     
     def load_data(self):
         """Загрузка данных из файла"""
@@ -406,7 +421,7 @@ class MultiParameterPlotApp:
         self.ax1.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S\n%d.%m.%y'))
         plt.setp(self.ax1.get_xticklabels(), rotation=0)
         self.ax1.tick_params(axis='x', colors='white', labelsize=8)  # Уменьшенный размер шрифта на оси X        # Настройка заголовка
-        self.ax1.set_title("Мультипараметрический график", color='white', fontsize=10)  # Уменьшенный заголовок
+        # self.ax1.set_title("Мультипараметрический график", color='white', fontsize=10)  # Уменьшенный заголовок
         
         # Создание холста Matplotlib
         self.canvas = FigureCanvasTkAgg(self.fig, self.plot_frame)
@@ -431,7 +446,7 @@ class MultiParameterPlotApp:
             justify='left',  # Выравнивание текста по левому краю
             wraplength=1200,  # Ещё больше увеличенная ширина
             padx=15,  # Увеличенные отступы по бокам
-            pady=8    # Увеличенный отступ сверху и снизу
+            pady=2    # УМЕНЬШЕННЫЙ отступ сверху и снизу (было 8, стало 2)
         )
         
         # Позиционируем метку вверху окна, растягивая на всю ширину
@@ -448,7 +463,14 @@ class MultiParameterPlotApp:
         self.canvas.mpl_connect('button_release_event', self.on_button_release)
         
         # Регулировка пространства для осей
-        plt.subplots_adjust(right=0.85)  # Освобождает место для осей справа        # Автоматически подстраиваем компоновку        self.fig.tight_layout()
+        plt.subplots_adjust(
+            top=0.95,        # Увеличиваем до 0.95 (меньше места сверху)
+            right=0.85,      # Освобождает место для осей справа
+            bottom=0.15      # Место для оси X с датами
+        )
+
+        # Автоматически подстраиваем компоновку с минимальными отступами
+        self.fig.tight_layout(pad=1)  # Уменьшенный отступ (было по умолчанию ~3.0)
     
     def update_time_range(self):
         """Обновление временного диапазона"""
@@ -479,8 +501,7 @@ class MultiParameterPlotApp:
             min_date = max_date - timedelta(hours=hours)
         elif days:
             min_date = max_date - timedelta(days=days)
-        else:
-            return            
+        else:            return            
         self.start_date_entry.delete(0, tk.END)
         self.start_date_entry.insert(0, min_date.strftime("%Y-%m-%d %H:%M:%S"))
         
@@ -532,14 +553,12 @@ class MultiParameterPlotApp:
             if hasattr(self, 'param_value_labels'):
                 for param, param_label in list(self.param_value_labels.items()):
                     try:
-                        # Проверяем, что виджет еще существует
                         if param_label.winfo_exists():
                             param_label.config(text="--")
                     except tk.TclError:
-                        # Виджет был уничтожен, удаляем его из словаря
                         del self.param_value_labels[param]
             return
-        
+            
         x_coord = event.xdata
         y_coord = event.ydata
         
@@ -548,10 +567,6 @@ class MultiParameterPlotApp:
                 # Удаляем предыдущую вертикальную линию
                 if self.cursor_line is not None:
                     self.cursor_line.remove()
-                
-                # Рисуем новую вертикальную линию курсора
-                self.cursor_line = event.inaxes.axvline(x=x_coord, color='white', linestyle='--', 
-                                                       linewidth=1, alpha=0.7)
                 
                 date_coord = mdates.num2date(x_coord)
                 date_str = date_coord.strftime('%H:%M:%S %d.%m.%y')
@@ -584,12 +599,11 @@ class MultiParameterPlotApp:
                             closest_time = filtered_df.loc[closest_idx, self.datetime_column]
                             closest_x = mdates.date2num(closest_time)
                             
-                            # Обновляем позицию вертикальной линии для точного совпадения с данными
-                            if self.cursor_line is not None:
-                                self.cursor_line.remove()
-                            self.cursor_line = event.inaxes.axvline(x=closest_x, color='yellow', linestyle='-', 
-                                                                   linewidth=2, alpha=0.8)
-                              # Собираем значения всех параметров в этой точке с фиксированной шириной
+                            # Рисуем СЕРУЮ ПУНКТИРНУЮ вертикальную линию курсора
+                            self.cursor_line = event.inaxes.axvline(x=closest_x, color='gray', linestyle='--', 
+                                                                   linewidth=1.5, alpha=0.8)
+                            
+                            # Собираем значения всех параметров в этой точке с фиксированной шириной
                             param_values = []
                             for param in self.params:
                                 if param in filtered_df.columns:
@@ -630,7 +644,13 @@ class MultiParameterPlotApp:
                     
                     except Exception as inner_e:
                         print(f"Ошибка при получении значений параметров: {inner_e}")
-                        coord_parts.append(f"y: {y_coord:>8.2f}")
+                        # Рисуем простую серую пунктирную линию при ошибке
+                        self.cursor_line = event.inaxes.axvline(x=x_coord, color='gray', linestyle='--', 
+                                                               linewidth=1.5, alpha=0.8)
+                else:
+                    # Рисуем простую серую пунктирную линию если нет данных
+                    self.cursor_line = event.inaxes.axvline(x=x_coord, color='gray', linestyle='--', 
+                                                           linewidth=1.5, alpha=0.8)
                 
                 # Объединяем все части в одну строку с увеличенными разделителями
                 coord_text = "   |   ".join(coord_parts)
@@ -653,8 +673,7 @@ class MultiParameterPlotApp:
                         # Проверяем, что виджет еще существует
                         if param_label.winfo_exists():
                             param_label.config(text="--")
-                    except tk.TclError:
-                        # Виджет был уничтожен, удаляем его из словаря
+                    except tk.TclError:                        # Виджет был уничтожен, удаляем его из словаря
                         del self.param_value_labels[param]
 
     def on_scroll(self, event):
@@ -733,7 +752,26 @@ class MultiParameterPlotApp:
             
             # Возвращаем обычный курсор
             self.canvas.get_tk_widget().config(cursor="")
+            
+    def show_about(self):
+        """Показ информации о программе"""
+        about_text = """Multi-Parameter Data Analyzer v1.0
+    
+Профессиональный инструмент для визуализации
+многопараметрических данных из CSV/Excel файлов.
 
+Разработчик: j15
+GitHub: https://github.com/jackal100500/CSV_software.git
+
+© 2025"""
+    
+        tk.messagebox.showinfo("About", about_text)
+
+    def open_github(self):
+        """Открытие GitHub репозитория"""
+        import webbrowser
+        webbrowser.open("https://github.com/jackal100500/CSV_software.git")
+        
 # Запуск приложения
 if __name__ == "__main__":
     root = tk.Tk()
