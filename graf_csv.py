@@ -166,23 +166,24 @@ class MultiParameterPlotApp:
         """Открытие окна для выбора столбцов для отображения"""
         select_window = tk.Toplevel(self.root)
         select_window.title("Выбор столбцов для отображения")
-        select_window.geometry("400x500")  # Увеличиваем начальную высоту
-        
+        select_window.geometry("450x550")  # Увеличиваем размер окна
+
         # Основной фрейм
         main_frame = ttk.Frame(select_window)
         main_frame.pack(fill="both", expand=True, padx=10, pady=10)
-        
+
         # Фрейм для выбора столбца даты/времени
         datetime_frame = ttk.LabelFrame(main_frame, text="Выберите столбец с датой и временем:")
         datetime_frame.pack(fill="x", padx=5, pady=5)
-        
+
         datetime_var = tk.StringVar()
-        datetime_combo = ttk.Combobox(datetime_frame, textvariable=datetime_var, values=list(self.df.columns))
+        datetime_combo = ttk.Combobox(datetime_frame, textvariable=datetime_var, 
+                                    values=list(self.df.columns), state="readonly")
         datetime_combo.pack(pady=5, padx=10, fill="x")
-        
-        # Определение столбца с датой/временем автоматически
+
+        # Улучшенное определение столбца с датой/временем
         for col in self.df.columns:
-            if 'date' in col.lower() or 'time' in col.lower() or 'datetime' in col.lower():
+            if any(kw in col.lower() for kw in ['date', 'time', 'datetime', 'дата', 'время']):
                 datetime_combo.set(col)
                 break
         
@@ -210,25 +211,33 @@ class MultiParameterPlotApp:
         
         # Создаем чекбоксы для каждого столбца
         param_vars = {}
-        param_colors = {}
+        param_colors_vars = {}
+        
+        # Расширенный список доступных цветов
+        available_colors = self.colors + ['black', 'gray', 'silver', 'maroon', 'olive', 'navy', 'teal', 'purple']
         
         for i, col in enumerate(self.df.columns):
-            frame = ttk.Frame(param_scrollable_frame)
-            frame.pack(fill="x", pady=2, padx=5)
+            if col == datetime_var.get(): 
+                continue  # Пропускаем столбец даты/времени
+
+            # Компактная компоновка в одной строке
+            row_frame = ttk.Frame(param_scrollable_frame)
+            row_frame.pack(fill="x", pady=2, padx=5)
             
             var = tk.BooleanVar(value=False)
             param_vars[col] = var
             
-            ttk.Checkbutton(frame, text=col, variable=var).pack(side="left", padx=(0, 5))
+            # Чекбокс с фиксированной шириной
+            cb = ttk.Checkbutton(row_frame, text=col, variable=var, width=25)
+            cb.pack(side="left", padx=(0, 5))
             
-            color_label = ttk.Label(frame, text="Цвет:")
-            color_label.pack(side="left", padx=(20, 5))
-            
+            # Выбор цвета справа от чекбокса
             color_var = tk.StringVar(value=self.colors[i % len(self.colors)])
-            param_colors[col] = color_var
+            param_colors_vars[col] = color_var
             
-            color_combo = ttk.Combobox(frame, textvariable=color_var, values=self.colors, width=10)
-            color_combo.pack(side="left")
+            color_combo = ttk.Combobox(row_frame, textvariable=color_var, 
+                                     values=available_colors, width=10, state="readonly")
+            color_combo.pack(side="left", padx=(10, 0))
         
         # Добавляем кнопку внизу окна в отдельном фрейме
         button_frame = ttk.Frame(main_frame)
@@ -237,16 +246,22 @@ class MultiParameterPlotApp:
         ttk.Button(
             button_frame, 
             text="Применить", 
-            command=lambda: self.apply_selection(datetime_var.get(), param_vars, param_colors, select_window)
+            command=lambda: self.apply_selection(datetime_var.get(), param_vars, param_colors_vars, select_window)
         ).pack(pady=5)
         
-        # Привязка прокрутки колесиком мыши
-        canvas.bind_all("<MouseWheel>", lambda event: canvas.yview_scroll(int(-1*(event.delta/120)), "units"))
+        # Улучшенная привязка прокрутки колесиком мыши
+        canvas.bind_all("<MouseWheel>", lambda event, c=canvas: c.yview_scroll(int(-1*(event.delta/120)), "units"))
+        select_window.bind("<Destroy>", lambda event: self.root.unbind_all("<MouseWheel>"))
     
     
-    def apply_selection(self, datetime_column, param_vars, param_colors, window):
+    def apply_selection(self, datetime_column, param_vars, param_colors_vars, window):
         """Применение выбранных столбцов и отображение графика"""
         self.datetime_column = datetime_column
+        
+        # Проверяем что выбран столбец даты/времени
+        if not self.datetime_column:
+            tk.messagebox.showerror("Ошибка", "Не выбран столбец с датой и временем.")
+            return
         
         # Преобразуем столбец с датой/временем
         try:
@@ -263,7 +278,7 @@ class MultiParameterPlotApp:
         for col, var in param_vars.items():
             if var.get() and col != self.datetime_column:
                 self.params.append(col)
-                self.param_colors[col] = param_colors[col].get()
+                self.param_colors[col] = param_colors_vars[col].get()
         
         if not self.params:
             tk.messagebox.showwarning("Предупреждение", "Не выбрано ни одного параметра для отображения")
