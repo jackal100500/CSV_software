@@ -3,6 +3,18 @@ _Log/
 _Log1/
 _Log2/
 
+# Виртуальные среды для сборки
+venv_build/
+env_build/
+.venv_build/
+
+# Файлы сборки PyInstaller
+build/
+dist/
+*.spec.backup
+*.manifest
+*.exe
+
 # Файлы данных
 *.csv
 #*.xlsx
