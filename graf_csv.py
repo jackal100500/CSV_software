@@ -348,8 +348,7 @@ class MultiParameterPlotApp:
             # Настройка цвета оси и делений
             ax.tick_params(axis='y', colors=self.param_colors[param], labelsize=8)  # Уменьшенный размер цифр
             ax.spines['right'].set_color(self.param_colors[param])
-            
-            # Добавляем информацию о текущем значении параметра
+              # Добавляем информацию о параметре (значение будет обновляться при движении курсора)
             frame = ttk.Frame(self.info_frame, style='Black.TFrame')
             frame.pack(side="left", padx=10, pady=5)
             
@@ -359,12 +358,17 @@ class MultiParameterPlotApp:
                                   style='Black.TLabel')
             param_label.pack(side="left")
             
-            last_value = filtered_df[param].iloc[-1] if not filtered_df.empty else "Н/Д"
-            value_label = ttk.Label(frame, text=str(last_value),
+            # Создаем метку для значения, которая будет обновляться
+            value_label = ttk.Label(frame, text="--",
                                   background='black',
                                   foreground='white',
                                   style='Black.TLabel')
             value_label.pack(side="left", padx=5)
+            
+            # Сохраняем ссылку на метку для обновления в on_mouse_move
+            if not hasattr(self, 'param_value_labels'):
+                self.param_value_labels = {}
+            self.param_value_labels[param] = value_label
         
         # Настройка форматирования оси X (дата)
         self.ax1.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S\n%d.%m.%y'))
@@ -455,6 +459,11 @@ class MultiParameterPlotApp:
                 self.cursor_line.remove()
                 self.cursor_line = None
                 self.canvas.draw_idle()
+            
+            # Очищаем значения в информационном блоке
+            if hasattr(self, 'param_value_labels'):
+                for param_label in self.param_value_labels.values():
+                    param_label.config(text="--")
             return
         
         x_coord = event.xdata
@@ -506,8 +515,7 @@ class MultiParameterPlotApp:
                                 self.cursor_line.remove()
                             self.cursor_line = event.inaxes.axvline(x=closest_x, color='yellow', linestyle='-', 
                                                                    linewidth=2, alpha=0.8)
-                            
-                            # Собираем значения всех параметров в этой точке с фиксированной шириной
+                              # Собираем значения всех параметров в этой точке с фиксированной шириной
                             param_values = []
                             for param in self.params:
                                 if param in filtered_df.columns:
@@ -517,10 +525,18 @@ class MultiParameterPlotApp:
                                         param_short = param[:15]  # Обрезаем длинные названия
                                         param_text = f"{param_short:<15}: {value:>8.2f}"
                                         param_values.append(param_text)
+                                        
+                                        # Обновляем значение в информационном блоке
+                                        if hasattr(self, 'param_value_labels') and param in self.param_value_labels:
+                                            self.param_value_labels[param].config(text=f"{value:.2f}")
                                     else:
                                         param_short = param[:15]
                                         param_text = f"{param_short:<15}: {'н/д':>8}"
                                         param_values.append(param_text)
+                                        
+                                        # Обновляем значение в информационном блоке
+                                        if hasattr(self, 'param_value_labels') and param in self.param_value_labels:
+                                            self.param_value_labels[param].config(text="н/д")
                             
                             # Добавляем параметры с увеличенными отступами
                             if param_values:
@@ -544,6 +560,10 @@ class MultiParameterPlotApp:
                 print(f"Ошибка в on_mouse_move: {e}")
         else:
             self.coords_label.config(text="")
+            # Очищаем значения в информационном блоке когда нет координат
+            if hasattr(self, 'param_value_labels'):
+                for param_label in self.param_value_labels.values():
+                    param_label.config(text="--")
 
 # Запуск приложения
 if __name__ == "__main__":
