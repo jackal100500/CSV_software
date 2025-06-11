@@ -14,11 +14,18 @@ class MultiParameterPlotApp:
         self.root.title("Визуализация нескольких параметров")
         self.root.geometry("1200x850")
         
-        # Переменные для хранения данных
+        # Настройка стилей
+        style = ttk.Style()
+        style.configure('Black.TFrame', background='black')
+        style.configure('Black.TLabel', background='black')
+          # Переменные для хранения данных
         self.df = None
         self.params = []
         self.datetime_column = None
         self.colors = ['red', 'green', 'white', 'cyan', 'magenta', 'yellow']
+        
+        # Переменная для вертикальной линии курсора
+        self.cursor_line = None
         
         # Создание фрейма для временного диапазона
         self.time_frame = ttk.LabelFrame(root, text="Временной диапазон")
@@ -61,19 +68,23 @@ class MultiParameterPlotApp:
                   command=lambda: self.set_time_preset(days=30)).pack(side="left", padx=5)
         
         # Создание области для отображения информации о параметрах
-        self.info_frame = ttk.LabelFrame(root, text="Информация о параметрах")
+        self.info_frame = ttk.LabelFrame(root, text="Информация о параметрах", style='Black.TLabelframe')
         self.info_frame.pack(fill="x", padx=10, pady=5)
+        
+        # Добавьте стиль для LabelFrame
+        style.configure('Black.TLabelframe', background='black', foreground='white')
+        style.configure('Black.TLabelframe.Label', background='black', foreground='white')
         
         # Создание фрейма для графика
         self.plot_frame = ttk.Frame(root)
         self.plot_frame.pack(fill="both", expand=True, padx=10, pady=5)
-        
-        # Установка начальных значений
+          # Установка начальных значений
         self.fig = None
         self.canvas = None
         self.axes = []
         self.lines = []
         self.param_labels = []
+        self.cursor_line = None  # Добавляем переменную для вертикальной линии курсора
         
         # Инициализация пустого графика
         self.init_plot()
@@ -109,6 +120,26 @@ class MultiParameterPlotApp:
         self.toolbar.update()
         self.toolbar.pack(side=tk.BOTTOM, fill=tk.X)
         
+        # Отключение отображения координат в стандартной панели инструментов
+        self.toolbar.set_message = lambda s: None
+        
+        # Метка для координат - размещаем во всю ширину сверху, с выравниванием по центру
+        self.coords_label = tk.Label(self.plot_frame, text="", bg='black', fg='white', 
+                                    font=('Courier', 10), anchor='center', justify='center',
+                                    wraplength=800)  # Большая ширина переноса текста
+                                    
+        # Располагаем метку по центру вверху
+        self.coords_label.place(relx=0.5, rely=0.0, anchor='n')
+        
+        # Подключение обработчика движения мыши
+        self.canvas.mpl_connect('motion_notify_event', self.on_mouse_move)
+        
+        # Регулировка пространства для осей
+        plt.subplots_adjust(right=0.85)  # Освобождает место для осей справа
+
+        # Автоматически подстраиваем компоновку
+        self.fig.tight_layout()
+    
     def load_data(self):
         """Загрузка данных из файла"""
         file_path = filedialog.askopenfilename(
@@ -257,11 +288,11 @@ class MultiParameterPlotApp:
         """Обновление графика с выбранными параметрами"""
         if self.df is None or not self.params:
             return
-            
+        
         # Очищаем предыдущий график
         for widget in self.plot_frame.winfo_children():
             widget.destroy()
-            
+        
         for widget in self.info_frame.winfo_children():
             widget.destroy()
         
@@ -319,21 +350,26 @@ class MultiParameterPlotApp:
             ax.spines['right'].set_color(self.param_colors[param])
             
             # Добавляем информацию о текущем значении параметра
-            frame = ttk.Frame(self.info_frame)
+            frame = ttk.Frame(self.info_frame, style='Black.TFrame')
             frame.pack(side="left", padx=10, pady=5)
             
-            ttk.Label(frame, text=f"{param}:", foreground=self.param_colors[param]).pack(side="left")
+            param_label = ttk.Label(frame, text=f"{param}:", 
+                                  foreground=self.param_colors[param],
+                                  background='black',
+                                  style='Black.TLabel')
+            param_label.pack(side="left")
             
             last_value = filtered_df[param].iloc[-1] if not filtered_df.empty else "Н/Д"
-            value_label = ttk.Label(frame, text=str(last_value))
+            value_label = ttk.Label(frame, text=str(last_value),
+                                  background='black',
+                                  foreground='white',
+                                  style='Black.TLabel')
             value_label.pack(side="left", padx=5)
         
         # Настройка форматирования оси X (дата)
         self.ax1.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S\n%d.%m.%y'))
         plt.setp(self.ax1.get_xticklabels(), rotation=0)
-        self.ax1.tick_params(axis='x', colors='white', labelsize=8)  # Уменьшенный размер шрифта на оси X
-
-        # Настройка заголовка
+        self.ax1.tick_params(axis='x', colors='white', labelsize=8)  # Уменьшенный размер шрифта на оси X        # Настройка заголовка
         self.ax1.set_title("Мультипараметрический график", color='white', fontsize=10)  # Уменьшенный заголовок
         
         # Создание холста Matplotlib
@@ -346,11 +382,30 @@ class MultiParameterPlotApp:
         self.toolbar.update()
         self.toolbar.pack(side=tk.BOTTOM, fill=tk.X)
         
+        # Отключение отображения координат в стандартной панели инструментов
+        self.toolbar.set_message = lambda s: None
+          # Улучшенная метка для координат - размещаем во всю ширину сверху
+        self.coords_label = tk.Label(
+            self.plot_frame, 
+            text="", 
+            bg='black', 
+            fg='white', 
+            font=('Courier', 10),
+            anchor='w',  # Выравнивание по левому краю вместо центра
+            justify='left',  # Выравнивание текста по левому краю
+            wraplength=1200,  # Ещё больше увеличенная ширина
+            padx=15,  # Увеличенные отступы по бокам
+            pady=8    # Увеличенный отступ сверху и снизу
+        )
+        
+        # Позиционируем метку вверху окна, растягивая на всю ширину
+        self.coords_label.pack(side=tk.TOP, fill=tk.X, before=self.canvas.get_tk_widget())
+        
+        # Подключение обработчика движения мыши
+        self.canvas.mpl_connect('motion_notify_event', self.on_mouse_move)
+        
         # Регулировка пространства для осей
-        plt.subplots_adjust(right=0.85)  # Освобождает место для осей справа
-
-        # Автоматически подстраиваем компоновку
-        self.fig.tight_layout()
+        plt.subplots_adjust(right=0.85)  # Освобождает место для осей справа        # Автоматически подстраиваем компоновку        self.fig.tight_layout()
     
     def update_time_range(self):
         """Обновление временного диапазона"""
@@ -382,8 +437,7 @@ class MultiParameterPlotApp:
         elif days:
             min_date = max_date - timedelta(days=days)
         else:
-            return
-            
+            return            
         self.start_date_entry.delete(0, tk.END)
         self.start_date_entry.insert(0, min_date.strftime("%Y-%m-%d %H:%M:%S"))
         
@@ -391,6 +445,105 @@ class MultiParameterPlotApp:
         self.end_date_entry.insert(0, max_date.strftime("%Y-%m-%d %H:%M:%S"))
         
         self.update_plot()
+    
+    def on_mouse_move(self, event):
+        """Обработчик движения мыши для отображения координат вверху"""
+        if event.inaxes is None:
+            self.coords_label.config(text="")
+            # Удаляем вертикальную линию, если курсор вне графика
+            if self.cursor_line is not None:
+                self.cursor_line.remove()
+                self.cursor_line = None
+                self.canvas.draw_idle()
+            return
+        
+        x_coord = event.xdata
+        y_coord = event.ydata
+        
+        if x_coord is not None and y_coord is not None:
+            try:
+                # Удаляем предыдущую вертикальную линию
+                if self.cursor_line is not None:
+                    self.cursor_line.remove()
+                
+                # Рисуем новую вертикальную линию курсора
+                self.cursor_line = event.inaxes.axvline(x=x_coord, color='white', linestyle='--', 
+                                                       linewidth=1, alpha=0.7)
+                
+                date_coord = mdates.num2date(x_coord)
+                date_str = date_coord.strftime('%H:%M:%S %d.%m.%y')
+                
+                # Начинаем с времени с фиксированной шириной
+                coord_parts = [f"Время: {date_str:<20}"]
+                
+                # Найдем ближайшую точку во временном ряду
+                if self.df is not None and self.datetime_column is not None and hasattr(self, 'params') and self.params:
+                    try:
+                        # Получаем текущий временной диапазон для поиска только в отфильтрованных данных
+                        start_date = pd.to_datetime(self.start_date_entry.get())
+                        end_date = pd.to_datetime(self.end_date_entry.get())
+                        
+                        # Фильтруем данные по временному диапазону
+                        mask = (self.df[self.datetime_column] >= start_date) & (self.df[self.datetime_column] <= end_date)
+                        filtered_df = self.df[mask]
+                        
+                        if not filtered_df.empty:
+                            # Преобразуем координату X в формат timestamp
+                            timestamp = date_coord.timestamp()
+                            
+                            # Преобразуем столбец даты/времени в timestamp для поиска ближайшей точки
+                            timestamps = filtered_df[self.datetime_column].apply(lambda x: x.timestamp())
+                            
+                            # Находим индекс ближайшей точки
+                            closest_idx = (timestamps - timestamp).abs().idxmin()
+                            
+                            # Получаем точное время ближайшей точки для более точного позиционирования линии
+                            closest_time = filtered_df.loc[closest_idx, self.datetime_column]
+                            closest_x = mdates.date2num(closest_time)
+                            
+                            # Обновляем позицию вертикальной линии для точного совпадения с данными
+                            if self.cursor_line is not None:
+                                self.cursor_line.remove()
+                            self.cursor_line = event.inaxes.axvline(x=closest_x, color='yellow', linestyle='-', 
+                                                                   linewidth=2, alpha=0.8)
+                            
+                            # Собираем значения всех параметров в этой точке с фиксированной шириной
+                            param_values = []
+                            for param in self.params:
+                                if param in filtered_df.columns:
+                                    value = filtered_df.loc[closest_idx, param]
+                                    if pd.notna(value):
+                                        # Используем фиксированную ширину для названия параметра и значения
+                                        param_short = param[:15]  # Обрезаем длинные названия
+                                        param_text = f"{param_short:<15}: {value:>8.2f}"
+                                        param_values.append(param_text)
+                                    else:
+                                        param_short = param[:15]
+                                        param_text = f"{param_short:<15}: {'н/д':>8}"
+                                        param_values.append(param_text)
+                            
+                            # Добавляем параметры с увеличенными отступами
+                            if param_values:
+                                coord_parts.extend(param_values)
+                    
+                    except Exception as inner_e:
+                        print(f"Ошибка при получении значений параметров: {inner_e}")
+                        coord_parts.append(f"y: {y_coord:>8.2f}")
+                
+                # Объединяем все части в одну строку с увеличенными разделителями
+                coord_text = "   |   ".join(coord_parts)
+                self.coords_label.config(text=coord_text)
+                
+                # Обновляем canvas для отображения линии
+                self.canvas.draw_idle()
+                
+            except Exception as e:
+                # При ошибке возвращаемся к простому формату
+                coord_text = f"x: {x_coord:.2f}, y: {y_coord:.2f}"
+                self.coords_label.config(text=coord_text)
+                print(f"Ошибка в on_mouse_move: {e}")
+        else:
+            self.coords_label.config(text="")
 
 # Запуск приложения
 if __name__ == "__main__":
