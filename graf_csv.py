@@ -27,6 +27,12 @@ class MultiParameterPlotApp:
         # Переменная для вертикальной линии курсора
         self.cursor_line = None
         
+        # Переменные для панорамирования (перетаскивания) графика
+        self.is_panning = False
+        self.pan_start_point = None
+        self.pan_start_xlim = None
+        self.pan_start_ylim = None
+        
         # Создание фрейма для временного диапазона
         self.time_frame = ttk.LabelFrame(root, text="Временной диапазон")
         self.time_frame.pack(fill="x", padx=10, pady=5)
@@ -133,6 +139,13 @@ class MultiParameterPlotApp:
         
         # Подключение обработчика движения мыши
         self.canvas.mpl_connect('motion_notify_event', self.on_mouse_move)
+        
+        # Подключение обработчика прокрутки колесика мыши для масштабирования
+        self.canvas.mpl_connect('scroll_event', self.on_scroll)
+        
+        # Подключение обработчиков для панорамирования
+        self.canvas.mpl_connect('button_press_event', self.on_button_press)
+        self.canvas.mpl_connect('button_release_event', self.on_button_release)
         
         # Регулировка пространства для осей
         plt.subplots_adjust(right=0.85)  # Освобождает место для осей справа
@@ -304,6 +317,10 @@ class MultiParameterPlotApp:
         if self.df is None or not self.params:
             return
         
+        # Очищаем ссылки на старые виджеты параметров
+        if hasattr(self, 'param_value_labels'):
+            self.param_value_labels.clear()
+        
         # Очищаем предыдущий график
         for widget in self.plot_frame.winfo_children():
             widget.destroy()
@@ -423,6 +440,13 @@ class MultiParameterPlotApp:
         # Подключение обработчика движения мыши
         self.canvas.mpl_connect('motion_notify_event', self.on_mouse_move)
         
+        # Подключение обработчика прокрутки колесика мыши для масштабирования
+        self.canvas.mpl_connect('scroll_event', self.on_scroll)
+        
+        # Подключение обработчиков для панорамирования
+        self.canvas.mpl_connect('button_press_event', self.on_button_press)
+        self.canvas.mpl_connect('button_release_event', self.on_button_release)
+        
         # Регулировка пространства для осей
         plt.subplots_adjust(right=0.85)  # Освобождает место для осей справа        # Автоматически подстраиваем компоновку        self.fig.tight_layout()
     
@@ -466,7 +490,36 @@ class MultiParameterPlotApp:
         self.update_plot()
     
     def on_mouse_move(self, event):
-        """Обработчик движения мыши для отображения координат вверху"""
+        """Обработчик движения мыши для отображения координат вверху и панорамирования"""
+        # Обработка панорамирования
+        if self.is_panning and event.inaxes and self.pan_start_point:
+            # Вычисляем смещение курсора
+            dx = event.xdata - self.pan_start_point[0]
+            dy = event.ydata - self.pan_start_point[1]
+            
+            # Применяем смещение к осям
+            if self.pan_start_xlim and self.pan_start_ylim:
+                # Новые пределы с учетом смещения
+                new_xlim = [self.pan_start_xlim[0] - dx, self.pan_start_xlim[1] - dx]
+                new_ylim = [self.pan_start_ylim[0] - dy, self.pan_start_ylim[1] - dy]
+                
+                # Применяем к текущей оси
+                event.inaxes.set_xlim(new_xlim)
+                event.inaxes.set_ylim(new_ylim)
+                
+                # Синхронизируем ось X для всех осей (мультипараметрический график)
+                if hasattr(self, 'axes') and len(self.axes) > 1:
+                    for ax in self.axes:
+                        ax.set_xlim(new_xlim)
+                
+                # Обновляем график
+                self.canvas.draw_idle()
+            return
+        
+        # Остальная логика для отображения координат (только если не панорамируем)
+        if self.is_panning:
+            return
+            
         if event.inaxes is None:
             self.coords_label.config(text="")
             # Удаляем вертикальную линию, если курсор вне графика
@@ -477,8 +530,14 @@ class MultiParameterPlotApp:
             
             # Очищаем значения в информационном блоке
             if hasattr(self, 'param_value_labels'):
-                for param_label in self.param_value_labels.values():
-                    param_label.config(text="--")
+                for param, param_label in list(self.param_value_labels.items()):
+                    try:
+                        # Проверяем, что виджет еще существует
+                        if param_label.winfo_exists():
+                            param_label.config(text="--")
+                    except tk.TclError:
+                        # Виджет был уничтожен, удаляем его из словаря
+                        del self.param_value_labels[param]
             return
         
         x_coord = event.xdata
@@ -543,7 +602,13 @@ class MultiParameterPlotApp:
                                         
                                         # Обновляем значение в информационном блоке
                                         if hasattr(self, 'param_value_labels') and param in self.param_value_labels:
-                                            self.param_value_labels[param].config(text=f"{value:.2f}")
+                                            try:
+                                                # Проверяем, что виджет еще существует
+                                                if self.param_value_labels[param].winfo_exists():
+                                                    self.param_value_labels[param].config(text=f"{value:.2f}")
+                                            except tk.TclError:
+                                                # Виджет был уничтожен, удаляем его из словаря
+                                                del self.param_value_labels[param]
                                     else:
                                         param_short = param[:15]
                                         param_text = f"{param_short:<15}: {'н/д':>8}"
@@ -551,7 +616,13 @@ class MultiParameterPlotApp:
                                         
                                         # Обновляем значение в информационном блоке
                                         if hasattr(self, 'param_value_labels') and param in self.param_value_labels:
-                                            self.param_value_labels[param].config(text="н/д")
+                                            try:
+                                                # Проверяем, что виджет еще существует
+                                                if self.param_value_labels[param].winfo_exists():
+                                                    self.param_value_labels[param].config(text="н/д")
+                                            except tk.TclError:
+                                                # Виджет был уничтожен, удаляем его из словаря
+                                                del self.param_value_labels[param]
                             
                             # Добавляем параметры с увеличенными отступами
                             if param_values:
@@ -577,8 +648,91 @@ class MultiParameterPlotApp:
             self.coords_label.config(text="")
             # Очищаем значения в информационном блоке когда нет координат
             if hasattr(self, 'param_value_labels'):
-                for param_label in self.param_value_labels.values():
-                    param_label.config(text="--")
+                for param, param_label in list(self.param_value_labels.items()):
+                    try:
+                        # Проверяем, что виджет еще существует
+                        if param_label.winfo_exists():
+                            param_label.config(text="--")
+                    except tk.TclError:
+                        # Виджет был уничтожен, удаляем его из словаря
+                        del self.param_value_labels[param]
+
+    def on_scroll(self, event):
+        """Обработчик прокрутки колесика мыши для масштабирования графика"""
+        if event.inaxes is None:
+            return
+        
+        # Получаем текущие пределы осей
+        xlim = event.inaxes.get_xlim()
+        ylim = event.inaxes.get_ylim()
+        
+        # Получаем позицию курсора
+        xdata = event.xdata
+        ydata = event.ydata
+        
+        if xdata is None or ydata is None:
+            return
+        
+        # Коэффициент масштабирования
+        scale_factor = 0.9 if event.button == 'up' else 1.1
+        
+        # Вычисляем новые пределы с центром в позиции курсора
+        x_range = xlim[1] - xlim[0]
+        y_range = ylim[1] - ylim[0]
+        
+        # Новые размеры диапазонов
+        new_x_range = x_range * scale_factor
+        new_y_range = y_range * scale_factor
+        
+        # Вычисляем смещение относительно курсора
+        x_offset_left = (xdata - xlim[0]) / x_range
+        x_offset_right = (xlim[1] - xdata) / x_range
+        y_offset_bottom = (ydata - ylim[0]) / y_range
+        y_offset_top = (ylim[1] - ydata) / y_range
+        
+        # Новые пределы с центром в позиции курсора
+        new_xlim = [
+            xdata - new_x_range * x_offset_left,
+            xdata + new_x_range * x_offset_right
+        ]
+        new_ylim = [
+            ydata - new_y_range * y_offset_bottom,
+            ydata + new_y_range * y_offset_top
+        ]
+        
+        # Применяем новые пределы
+        event.inaxes.set_xlim(new_xlim)
+        event.inaxes.set_ylim(new_ylim)
+        
+        # Обновляем все связанные оси Y (для мультипараметрического графика)
+        if hasattr(self, 'axes') and len(self.axes) > 1:
+            for ax in self.axes[1:]:  # Пропускаем основную ось
+                ax.set_xlim(new_xlim)  # Устанавливаем тот же X диапазон для всех осей
+        
+        # Перерисовываем график
+        self.canvas.draw_idle()
+
+    def on_button_press(self, event):
+        """Обработчик нажатия кнопки мыши для начала панорамирования"""
+        if event.button == 1 and event.inaxes:  # Левая кнопка мыши
+            self.is_panning = True
+            self.pan_start_point = (event.xdata, event.ydata)
+            self.pan_start_xlim = event.inaxes.get_xlim()
+            self.pan_start_ylim = event.inaxes.get_ylim()
+            
+            # Изменяем курсор для индикации режима панорамирования
+            self.canvas.get_tk_widget().config(cursor="fleur")
+
+    def on_button_release(self, event):
+        """Обработчик отпускания кнопки мыши для окончания панорамирования"""
+        if event.button == 1:  # Левая кнопка мыши
+            self.is_panning = False
+            self.pan_start_point = None
+            self.pan_start_xlim = None
+            self.pan_start_ylim = None
+            
+            # Возвращаем обычный курсор
+            self.canvas.get_tk_widget().config(cursor="")
 
 # Запуск приложения
 if __name__ == "__main__":
