@@ -13,7 +13,7 @@ build/
 dist/
 *.spec.backup
 *.manifest
-*.exe
+# *.exe - временно разрешаем для релиза
 
 # Файлы данных
 *.csv
