@@ -731,15 +731,12 @@ class MultiParameterPlotApp:
         # Подключение обработчиков для панорамирования
         self.canvas.mpl_connect('button_press_event', self.on_button_press)
         self.canvas.mpl_connect('button_release_event', self.on_button_release)
-        
-        # Регулировка пространства для осей
+          # Регулировка пространства для осей
         plt.subplots_adjust(
             top=0.95,        # Увеличиваем до 0.95 (меньше места сверху)
             right=0.85,      # Освобождает место для осей справа
             bottom=0.15      # Место для оси X с датами
-        )
-
-        # Автоматически подстраиваем компоновку с минимальными отступами
+        )        # Автоматически подстраиваем компоновку с минимальными отступами
         self.fig.tight_layout(pad=1)  # Уменьшенный отступ (было по умолчанию ~3.0)
     
     def update_time_range(self):
@@ -748,10 +745,26 @@ class MultiParameterPlotApp:
     
     def reset_time_range(self):
         """Сброс временного диапазона к полному"""
-        if self.df is not None and self.datetime_column is not None:
-            min_date = self.df[self.datetime_column].min()
-            max_date = self.df[self.datetime_column].max()
+        if self.df is None:
+            return
             
+        min_date = None
+        max_date = None
+        
+        if self.use_paired_mode:
+            # Режим v1.1 - используем объединенную временную шкалу
+            if hasattr(self, 'time_param_pairs') and self.time_param_pairs:
+                combined_timeline = self.create_combined_timeline()
+                if combined_timeline is not None and not combined_timeline.empty:
+                    min_date = combined_timeline.index.min()
+                    max_date = combined_timeline.index.max()
+        else:
+            # Режим v1.0 - используем единый столбец времени
+            if hasattr(self, 'datetime_column') and self.datetime_column is not None:
+                min_date = self.df[self.datetime_column].min()
+                max_date = self.df[self.datetime_column].max()
+        
+        if min_date is not None and max_date is not None:
             self.start_date_entry.delete(0, tk.END)
             self.start_date_entry.insert(0, min_date.strftime("%Y-%m-%d %H:%M:%S"))
             
@@ -762,16 +775,32 @@ class MultiParameterPlotApp:
     
     def set_time_preset(self, hours=None, days=None):
         """Установка предустановленного временного диапазона"""
-        if self.df is None or self.datetime_column is None:
+        if self.df is None:
             return
             
-        max_date = self.df[self.datetime_column].max()
+        max_date = None
         
+        if self.use_paired_mode:
+            # Режим v1.1 - используем объединенную временную шкалу
+            if hasattr(self, 'time_param_pairs') and self.time_param_pairs:
+                combined_timeline = self.create_combined_timeline()
+                if combined_timeline is not None and not combined_timeline.empty:
+                    max_date = combined_timeline.index.max()
+        else:
+            # Режим v1.0 - используем единый столбец времени
+            if hasattr(self, 'datetime_column') and self.datetime_column is not None:
+                max_date = self.df[self.datetime_column].max()
+        
+        if max_date is None:
+            return
+            
         if hours:
             min_date = max_date - timedelta(hours=hours)
         elif days:
             min_date = max_date - timedelta(days=days)
-        else:            return            
+        else:
+            return
+            
         self.start_date_entry.delete(0, tk.END)
         self.start_date_entry.insert(0, min_date.strftime("%Y-%m-%d %H:%M:%S"))
         
