@@ -64,7 +64,8 @@ class PlotManager:
         print("- timeline_manager.py: Универсальная временная шкала")
     
     def plot_interpolated_data(self, ax: Axes, universal_timeline: pd.Series, 
-                             interpolated_data: Dict[str, pd.Series]):
+                             interpolated_data: Dict[str, pd.Series],
+                             enable_multiple_y_axes: bool = True):
         """
         Построение графика с интерполированными данными на универсальной временной шкале
         
@@ -72,65 +73,69 @@ class PlotManager:
             ax: Matplotlib Axes для рисования
             universal_timeline: Универсальная временная шкала из timeline_manager
             interpolated_data: Интерполированные параметры {param_name: values}
+            enable_multiple_y_axes: Создавать отдельную ось Y для каждого параметра
             
-        Использует:
-        - timeline_manager.create_universal_timeline(): Источник временной шкалы
-        - timeline_manager.interpolate_parameters(): Источник данных
+        Returns:
+            List[Axes]: Список всех созданных осей (основная + дополнительные)
         """
         ax.clear()
-        
         if universal_timeline is None or not interpolated_data:
             ax.text(0.5, 0.5, 'Нет данных для отображения', 
                    transform=ax.transAxes, ha='center', va='center',
                    fontsize=14, color='red')
-            return
-          # Подготовка временной оси
+            return [ax]
+        # Подготовка временной оси
         time_values = universal_timeline
-          # Проверяем, является ли это уже DatetimeIndex или нужна конвертация
         if not isinstance(time_values, pd.DatetimeIndex):
-            # Если это Series или другой тип, проверяем первый элемент
             if hasattr(time_values, 'iloc') and len(time_values) > 0:
                 first_element = time_values.iloc[0] if hasattr(time_values, 'iloc') else time_values[0]
                 if not isinstance(first_element, datetime):
                     try:
                         time_values = pd.to_datetime(time_values)
                     except Exception:
-                        # Если не удается конвертировать, используем числовую ось
                         pass
             else:
                 try:
                     time_values = pd.to_datetime(time_values)
                 except Exception:
                     pass
-        
-        # Построение графиков для каждого параметра
-        color_idx = 0
-        for param_name, param_values in interpolated_data.items():
-            if param_values is not None and len(param_values) > 0:
-                color = self.colors[color_idx % len(self.colors)]
-                
-                # Фильтрация NaN значений
-                valid_mask = ~pd.isna(param_values)
-                if valid_mask.any():
-                    valid_time = time_values[valid_mask]
-                    valid_values = param_values[valid_mask]
-                    
-                    # Построение линии
-                    ax.plot(valid_time, valid_values, 
-                           color=color, label=param_name, 
-                           linewidth=1.5, alpha=0.8)
-                    
-                    # Добавление точек данных (опционально)
-                    if len(valid_values) < 1000:  # Только для небольших наборов данных
-                        ax.scatter(valid_time, valid_values, 
-                                 color=color, s=20, alpha=0.6)
-                
-                color_idx += 1
-        
-        # Настройка осей и оформления
+        # Построение графиков для каждого параметра с отдельными осями Y
+        axes_list = [ax]  # Основная ось
+        param_names = list(interpolated_data.keys())
+        for i, (param_name, param_values) in enumerate(interpolated_data.items()):
+            if param_values is None or len(param_values) == 0:
+                continue
+            color = self.colors[i % len(self.colors)]
+            if enable_multiple_y_axes and i > 0:
+                current_ax = ax.twinx()
+                offset = 60 * (i - 1)
+                current_ax.spines['right'].set_position(('outward', offset))
+                current_ax.set_ylabel(param_name, color=color, fontsize=10, fontweight='bold')
+                current_ax.tick_params(axis='y', colors=color, labelsize=9)
+                current_ax.spines['right'].set_color(color)
+                axes_list.append(current_ax)
+            else:
+                current_ax = ax
+                if enable_multiple_y_axes:
+                    current_ax.set_ylabel(param_name, color=color, fontsize=10, fontweight='bold')
+                    current_ax.tick_params(axis='y', colors=color, labelsize=9)
+            valid_mask = ~pd.isna(param_values)
+            if valid_mask.any():
+                valid_time = time_values[valid_mask]
+                valid_values = param_values[valid_mask]
+                current_ax.plot(valid_time, valid_values, 
+                              color=color, linewidth=1.5,
+                              label=param_name, alpha=0.8)
+                if enable_multiple_y_axes and len(valid_values) > 0:
+                    y_margin = (valid_values.max() - valid_values.min()) * 0.1
+                    current_ax.set_ylim(valid_values.min() - y_margin, 
+                                       valid_values.max() + y_margin)
+                print(f"  📈 {param_name}: {len(valid_values)} точек, цвет {color}")
+            else:
+                print(f"  ⚠️ {param_name}: нет валидных данных")
         self.setup_plot_appearance(ax, time_values)
-        
         print(f"Построен график с {len(interpolated_data)} параметрами на универсальной временной шкале")
+        return axes_list
     
     def plot_raw_data(self, ax: Axes, df: pd.DataFrame, pairs: List[Tuple[str, str]]):
         """

@@ -81,12 +81,14 @@ class MultiParameterPlotApp:
         self.data_manager = DataManager()
         self.plot_manager = PlotManager()
         self.settings = Settings()
-        
-        # Данные приложения
+          # Данные приложения
         self.df = None
         self.current_file = None
         self.selected_pairs = []  # [(time_col, param_col), ...]
         self.universal_data = None  # Данные после интерполяции
+        self.current_axes = []  # Список всех осей (основная + twinx)
+        self.cursor_line = None  # Вертикальная линия курсора
+        self.param_value_labels = {}  # Метки для отображения значений параметров
         
         # Инициализация интерфейса
         self.setup_ui()
@@ -136,14 +138,21 @@ class MultiParameterPlotApp:
         settings_frame = ttk.LabelFrame(main_frame, text="Настройки универсальной временной шкалы")
         settings_frame.pack(fill=tk.X, pady=(0, 10))
         
-        # Настройки интерполяции
-        ttk.Label(settings_frame, text="Шаг временной сетки (сек):").pack(side=tk.LEFT, padx=5)
+        # Настройки интерполяции        ttk.Label(settings_frame, text="Шаг временной сетки (сек):").pack(side=tk.LEFT, padx=5)
         self.time_step_var = tk.DoubleVar(value=1.0)
         ttk.Entry(settings_frame, textvariable=self.time_step_var, width=10).pack(side=tk.LEFT, padx=5)
         
         self.interpolation_enabled = tk.BooleanVar(value=True)
         ttk.Checkbutton(settings_frame, text="Включить интерполяцию", 
                        variable=self.interpolation_enabled).pack(side=tk.LEFT, padx=10)
+        
+        # Панель отображения значений параметров (как в старой версии)
+        self.param_values_frame = ttk.LabelFrame(main_frame, text="Значения параметров под курсором")
+        self.param_values_frame.pack(fill=tk.X, pady=(0, 10))
+        
+        # Контейнер для значений параметров (будет заполняться динамически)
+        self.param_values_container = ttk.Frame(self.param_values_frame)
+        self.param_values_container.pack(fill=tk.X, padx=5, pady=5)
         
         # Область для графика (будет создана в setup_plot_area)
         self.plot_frame = ttk.Frame(main_frame)
@@ -276,27 +285,32 @@ class MultiParameterPlotApp:
             
             if self.interpolation_enabled.get():
                 # Создание универсальной временной шкалы
-                self.universal_data = self.timeline_manager.create_universal_timeline(
-                    self.df, self.selected_pairs
-                )
-                  # Интерполяция данных
-                interpolated_data = self.timeline_manager.interpolate_parameters(
+                self.universal_timeline = self.timeline_manager.create_universal_timeline(
                     self.df, self.selected_pairs
                 )
                 
-                # Построение графика через plot_manager.py
-                self.plot_manager.plot_interpolated_data(
-                    self.ax, self.universal_data, interpolated_data
+                # Интерполяция данных
+                self.universal_data = self.timeline_manager.interpolate_parameters(
+                    self.df, self.selected_pairs
+                )
+                
+                # Построение графика с множественными осями Y
+                self.current_axes = self.plot_manager.plot_interpolated_data(
+                    self.ax, self.universal_timeline, self.universal_data,
+                    enable_multiple_y_axes=True
                 )
             else:
                 # Простое построение без интерполяции (режим совместимости с v1.0)
                 self.plot_manager.plot_raw_data(
                     self.ax, self.df, self.selected_pairs
                 )
+                self.current_axes = [self.ax]
+            
+            # Создание меток для отображения значений параметров
+            self.setup_param_value_labels()
             
             # Обновление графика
             self.ax.grid(True, alpha=0.3)
-            self.ax.legend()
             self.canvas.draw()
             
         except Exception as e:
@@ -319,11 +333,157 @@ class MultiParameterPlotApp:
     
     # События мыши (перенесено из v1.0 graf_csv.py)
     def on_mouse_move(self, event):
-        """Обработка движения мыши (отображение координат)"""
-        if event.inaxes:
-            x, y = event.xdata, event.ydata
-            if x is not None and y is not None:
-                self.coord_label.config(text=f"Координаты: X={x:.2f}, Y={y:.4f}")
+        """
+        Обработка движения мыши с отображением значений параметров
+        
+        Функциональность (перенесена из v1.0):
+        - Отображение координат курсора
+        - Вертикальная линия под курсором  
+        - Значения всех параметров в точке пересечения
+        """
+        if not event.inaxes:
+            # Очистка при выходе из области графика
+            self.coord_label.config(text="Координаты: --")
+            self.clear_cursor_line()
+            self.clear_param_values()
+            return
+            
+        x, y = event.xdata, event.ydata
+        if x is None or y is None:
+            return
+            
+        # Базовые координаты
+        self.coord_label.config(text=f"Координаты: X={x:.2f}, Y={y:.4f}")
+        
+        # Если есть данные для анализа - показываем значения параметров
+        if (self.universal_data is not None and 
+            hasattr(self, 'universal_timeline') and 
+            self.selected_pairs):
+            
+            try:
+                self.update_cursor_line(x)
+                self.update_param_values(x)
+            except Exception as e:
+                print(f"Ошибка обновления значений параметров: {e}")
+                
+    def update_cursor_line(self, x_position):
+        """Обновление вертикальной линии курсора"""
+        # Удаляем предыдущую линию
+        self.clear_cursor_line()
+        
+        # Рисуем новую серую пунктирную линию
+        self.cursor_line = self.ax.axvline(x=x_position, color='gray', 
+                                         linestyle='--', linewidth=1.5, alpha=0.8)
+        self.canvas.draw_idle()
+        
+    def clear_cursor_line(self):
+        """Очистка вертикальной линии курсора"""
+        if self.cursor_line is not None:
+            try:
+                self.cursor_line.remove()
+            except:
+                pass
+            self.cursor_line = None
+            
+    def update_param_values(self, x_position):
+        """
+        Обновление значений параметров под курсором
+        
+        Args:
+            x_position: Позиция курсора по оси X (время)
+        """
+        if not hasattr(self, 'universal_timeline') or self.universal_timeline is None:
+            return
+            
+        try:
+            # Найти ближайшую точку во времени
+            import matplotlib.dates as mdates
+            
+            # Конвертируем X-координату в datetime
+            if isinstance(x_position, (int, float)):
+                cursor_time = mdates.num2date(x_position)
+            else:
+                cursor_time = x_position
+            
+            # Убираем информацию о часовом поясе для сравнения
+            if hasattr(cursor_time, 'tzinfo') and cursor_time.tzinfo is not None:
+                cursor_time = cursor_time.replace(tzinfo=None)
+                
+            # Найти ближайший индекс во временной шкале
+            time_series = pd.Series(self.universal_timeline)
+            
+            # Убеждаемся, что все времена без часовых поясов
+            if hasattr(time_series.iloc[0], 'tz') and time_series.iloc[0].tz is not None:
+                time_series = time_series.dt.tz_localize(None)
+            elif hasattr(time_series.iloc[0], 'tzinfo') and time_series.iloc[0].tzinfo is not None:
+                time_series = time_series.apply(lambda x: x.replace(tzinfo=None))
+            
+            # Найти ближайший по времени элемент
+            time_diffs = abs(time_series - cursor_time)
+            closest_idx = time_diffs.idxmin()
+            
+            # Обновить значения для каждого параметра
+            for param_name in self.universal_data.keys():
+                if param_name in self.param_value_labels:
+                    try:
+                        param_values = self.universal_data[param_name]
+                        if closest_idx < len(param_values):
+                            value = param_values.iloc[closest_idx]
+                            if pd.notna(value):
+                                self.param_value_labels[param_name].config(text=f"{value:.3f}")
+                            else:
+                                self.param_value_labels[param_name].config(text="н/д")
+                    except Exception as e:
+                        self.param_value_labels[param_name].config(text="--")
+                        
+        except Exception as e:
+            print(f"Ошибка обновления значений: {e}")
+            # import traceback
+            # traceback.print_exc()
+            
+    def clear_param_values(self):
+        """Очистка значений параметров"""
+        for label in self.param_value_labels.values():
+            try:
+                label.config(text="--")
+            except:
+                pass
+                
+    def setup_param_value_labels(self):
+        """
+        Создание меток для отображения значений параметров
+        Вызывается после построения графика
+        """
+        # Очистка предыдущих меток
+        for widget in self.param_values_container.winfo_children():
+            widget.destroy()
+        self.param_value_labels.clear()
+        
+        if not self.selected_pairs:
+            return
+            
+        # Создание меток для каждого параметра
+        colors = self.plot_manager.colors
+        for i, (time_col, param_col) in enumerate(self.selected_pairs):
+            color = colors[i % len(colors)]
+            
+            # Фрейм для параметра
+            param_frame = ttk.Frame(self.param_values_container)
+            param_frame.pack(side=tk.LEFT, padx=10, pady=2)
+            
+            # Название параметра (цветное)
+            name_label = tk.Label(param_frame, text=f"{param_col}:", 
+                                foreground=color, background='white',
+                                font=('Arial', 10, 'bold'))
+            name_label.pack(side=tk.LEFT)
+            
+            # Значение параметра
+            value_label = tk.Label(param_frame, text="--",
+                                 foreground='black', background='white',
+                                 font=('Arial', 10), width=8)
+            value_label.pack(side=tk.LEFT, padx=(5, 0))
+            
+            self.param_value_labels[param_col] = value_label
     
     def on_mouse_click(self, event):
         """Обработка клика мыши (начало панорамирования)"""
