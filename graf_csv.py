@@ -193,265 +193,354 @@ class MultiParameterPlotApp:
             if file_path.endswith(('.xlsx', '.xls')):
                 self.df = pd.read_excel(file_path)
             else:
-                self.df = pd.read_csv(file_path)
-              # Открываем окно выбора столбцов
+                self.df = pd.read_csv(file_path)            # Открываем окно выбора столбцов
             self.select_columns()
             
         except Exception as e:
             tk.messagebox.showerror("Ошибка загрузки", f"Ошибка при загрузке файла: {str(e)}")
     
     def select_columns(self):
-        """Открытие окна для выбора столбцов для отображения"""
+        """Открытие окна для выбора столбцов для отображения - v1.1"""
         select_window = tk.Toplevel(self.root)
         select_window.title("Выбор столбцов для отображения - v1.1")
-        select_window.geometry("500x650")  # Увеличиваем размер окна
+        select_window.geometry("600x700")
 
         # Основной фрейм
         main_frame = ttk.Frame(select_window)
         main_frame.pack(fill="both", expand=True, padx=10, pady=10)
 
-        # === НОВЫЙ БЛОК: Выбор режима работы ===
+        # === ВЫБОР РЕЖИМА РАБОТЫ ===
         mode_frame = ttk.LabelFrame(main_frame, text="Режим работы:")
         mode_frame.pack(fill="x", padx=5, pady=5)
         
-        mode_var = tk.StringVar(value="simple")
+        mode_var = tk.StringVar(value="v1.0")
         
-        ttk.Radiobutton(mode_frame, text="Простой (один столбец времени для всех)", 
-                       variable=mode_var, value="simple").pack(anchor="w", padx=10, pady=2)
-        ttk.Radiobutton(mode_frame, text="Парный (свое время для каждого параметра)", 
-                       variable=mode_var, value="paired").pack(anchor="w", padx=10, pady=2)
+        ttk.Radiobutton(mode_frame, text="Режим v1.0 (один столбец времени для всех)", 
+                       variable=mode_var, value="v1.0").pack(anchor="w", padx=10, pady=2)
+        ttk.Radiobutton(mode_frame, text="Режим v1.1 (парная привязка время → параметр)", 
+                       variable=mode_var, value="v1.1").pack(anchor="w", padx=10, pady=2)
 
-        # === БЛОК: Простой режим (как в v1.0) ===
-        simple_frame = ttk.LabelFrame(main_frame, text="Простой режим:")
-        simple_frame.pack(fill="x", padx=5, pady=5)
+        # === РЕЖИМ v1.0 (СОВМЕСТИМОСТЬ) ===
+        v10_frame = ttk.LabelFrame(main_frame, text="Режим v1.0:")
+        v10_frame.pack(fill="x", padx=5, pady=5)
 
-        # Фрейм для выбора столбца даты/времени
-        datetime_frame = ttk.Frame(simple_frame)
+        # Выбор столбца времени
+        datetime_frame = ttk.Frame(v10_frame)
         datetime_frame.pack(fill="x", padx=5, pady=5)
         
         ttk.Label(datetime_frame, text="Столбец времени:").pack(anchor="w")
         datetime_var = tk.StringVar()
         datetime_combo = ttk.Combobox(datetime_frame, textvariable=datetime_var, 
                                     values=list(self.df.columns), state="readonly")
-        datetime_combo.pack(fill="x", pady=2)        # Улучшенное определение столбца с датой/временем
+        datetime_combo.pack(fill="x", pady=2)
+
+        # Автоопределение столбца времени
         for col in self.df.columns:
             if any(kw in col.lower() for kw in ['date', 'time', 'datetime', 'дата', 'время']):
                 datetime_combo.set(col)
                 break
 
-        # === БЛОК: Парный режим (новый в v1.1) ===
-        paired_frame = ttk.LabelFrame(main_frame, text="Парный режим - автоопределенные пары:")
-        paired_frame.pack(fill="x", padx=5, pady=5)
+        # Выбор параметров
+        params_frame = ttk.Frame(v10_frame)
+        params_frame.pack(fill="both", expand=True, padx=5, pady=5)
         
-        # Автоопределение пар при наличии менеджера
-        auto_pairs = []
-        if self.timeline_manager:
-            try:
-                auto_pairs = self.timeline_manager.auto_detect_pairs(self.df)
-            except Exception as e:
-                print(f"Ошибка автоопределения пар: {e}")
+        ttk.Label(params_frame, text="Параметры для отображения:").pack(anchor="w")
         
-        # Отображаем найденные пары
-        pairs_info_label = ttk.Label(paired_frame, 
-                                   text=f"Найдено пар: {len(auto_pairs)}" if auto_pairs else "Пары не найдены")
-        pairs_info_label.pack(anchor="w", padx=10, pady=2)
-        
-        if auto_pairs:
-            pairs_text = "\n".join([f"• {time_col} → {param_col}" for time_col, param_col in auto_pairs[:5]])
-            if len(auto_pairs) > 5:
-                pairs_text += f"\n... и еще {len(auto_pairs) - 5} пар"
-            
-            pairs_display = ttk.Label(paired_frame, text=pairs_text, font=("Consolas", 8))
-            pairs_display.pack(anchor="w", padx=20, pady=2)
-
-        # === БЛОК: Выбор параметров ===
-        params_label_frame = ttk.LabelFrame(main_frame, text="Выберите параметры для отображения:")
-        params_label_frame.pack(fill="both", expand=True, padx=5, pady=5)
-        
-        # Создаем холст с полосой прокрутки
-        canvas = tk.Canvas(params_label_frame)
-        scrollbar = ttk.Scrollbar(params_label_frame, orient="vertical", command=canvas.yview)
-        
-        # Фрейм внутри холста для размещения параметров
-        param_scrollable_frame = ttk.Frame(canvas)
-        param_scrollable_frame.bind(
-            "<Configure>",
-            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
-        )
-        
-        canvas.create_window((0, 0), window=param_scrollable_frame, anchor="nw")
-        canvas.configure(yscrollcommand=scrollbar.set)
-          # Размещаем холст и полосу прокрутки
-        canvas.pack(side="left", fill="both", expand=True)
-        scrollbar.pack(side="right", fill="y")
-        
-        # Создаем чекбоксы для каждого столбца
         param_vars = {}
         param_colors_vars = {}
+        colors = ['red', 'blue', 'green', 'orange', 'purple', 'brown', 'pink', 'gray', 'olive', 'cyan']
         
-        # Расширенный список доступных цветов
-        available_colors = self.colors + ['black', 'gray', 'silver', 'maroon', 'olive', 'navy', 'teal', 'purple']
+        # Скроллируемый фрейм для параметров
+        params_canvas = tk.Canvas(params_frame, height=150)
+        params_scrollbar = ttk.Scrollbar(params_frame, orient="vertical", command=params_canvas.yview)
+        params_scrollable_frame = ttk.Frame(params_canvas)
         
-        # Функция для обновления отображения параметров в зависимости от режима
-        def update_param_display(*args):
-            # Очищаем текущие элементы
-            for widget in param_scrollable_frame.winfo_children():
-                widget.destroy()
-            param_vars.clear()
-            param_colors_vars.clear()
-            
-            current_mode = mode_var.get()
-            
-            if current_mode == "simple":
-                # Простой режим - показываем все числовые столбцы
-                for i, col in enumerate(self.df.columns):
-                    if col == datetime_var.get(): 
-                        continue  # Пропускаем столбец даты/времени
-                    if not pd.api.types.is_numeric_dtype(self.df[col]):
-                        continue  # Показываем только числовые столбцы
+        params_scrollable_frame.bind(
+            "<Configure>",
+            lambda e: params_canvas.configure(scrollregion=params_canvas.bbox("all"))
+        )
+        
+        params_canvas.create_window((0, 0), window=params_scrollable_frame, anchor="nw")
+        params_canvas.configure(yscrollcommand=params_scrollbar.set)
+        
+        params_canvas.pack(side="left", fill="both", expand=True)
+        params_scrollbar.pack(side="right", fill="y")
+        
+        # Создание чекбоксов для каждого столбца (кроме времени)
+        for i, col in enumerate(self.df.columns):
+            if col != datetime_var.get():
+                var = tk.BooleanVar()
+                param_vars[col] = var
+                
+                param_frame = ttk.Frame(params_scrollable_frame)
+                param_frame.pack(fill="x", padx=5, pady=2)
+                
+                ttk.Checkbutton(param_frame, text=col, variable=var).pack(side="left")
+                
+                color_var = tk.StringVar(value=colors[i % len(colors)])
+                param_colors_vars[col] = color_var
+                ttk.Combobox(param_frame, textvariable=color_var, values=colors, 
+                           state="readonly", width=10).pack(side="right", padx=(10, 0))
 
-                    # Компактная компоновка в одной строке
-                    row_frame = ttk.Frame(param_scrollable_frame)
-                    row_frame.pack(fill="x", pady=2, padx=5)
-                    
-                    var = tk.BooleanVar(value=False)
-                    param_vars[col] = var
-                    
-                    # Чекбокс с фиксированной шириной
-                    cb = ttk.Checkbutton(row_frame, text=col, variable=var, width=25)
-                    cb.pack(side="left", padx=(0, 5))
-                    
-                    # Выбор цвета справа от чекбокса
-                    color_var = tk.StringVar(value=self.colors[i % len(self.colors)])
-                    param_colors_vars[col] = color_var
-                    
-                    color_combo = ttk.Combobox(row_frame, textvariable=color_var, 
-                                             values=available_colors, width=10, state="readonly")
-                    color_combo.pack(side="left", padx=(10, 0))
-                    
-            else:  # paired mode
-                # Парный режим - показываем только параметры из автоопределенных пар
-                for i, (time_col, param_col) in enumerate(auto_pairs):
-                    row_frame = ttk.Frame(param_scrollable_frame)
-                    row_frame.pack(fill="x", pady=2, padx=5)
-                    
-                    var = tk.BooleanVar(value=True)  # По умолчанию включаем автоопределенные пары
-                    param_vars[param_col] = var
-                    
-                    # Показываем пару время + параметр
-                    cb = ttk.Checkbutton(row_frame, text=f"{time_col} → {param_col}", 
-                                       variable=var, width=30)
-                    cb.pack(side="left", padx=(0, 5))
-                    
-                    # Выбор цвета
-                    color_var = tk.StringVar(value=self.colors[i % len(self.colors)])
-                    param_colors_vars[param_col] = color_var
-                    
-                    color_combo = ttk.Combobox(row_frame, textvariable=color_var, 
-                                             values=available_colors, width=10, state="readonly")
-                    color_combo.pack(side="left", padx=(10, 0))
+        # === РЕЖИМ v1.1 (ПАРНАЯ ПРИВЯЗКА) ===
+        v11_frame = ttk.LabelFrame(main_frame, text="Режим v1.1 - Пары время → параметр:")
+        v11_frame.pack(fill="x", padx=5, pady=5)
+
+        # Список для хранения пар
+        pairs_list = []
         
-        # Привязываем обновление к изменению режима
-        mode_var.trace("w", update_param_display)
-        datetime_var.trace("w", update_param_display)
+        def add_pair():
+            """Добавить новую пару время → параметр"""
+            pair_frame = ttk.Frame(pairs_container)
+            pair_frame.pack(fill="x", pady=2)
+            
+            # Выпадающий список времени
+            time_var = tk.StringVar()
+            time_combo = ttk.Combobox(pair_frame, textvariable=time_var, 
+                                    values=list(self.df.columns), state="readonly", width=15)
+            time_combo.pack(side="left", padx=2)
+            
+            # Стрелка
+            ttk.Label(pair_frame, text="→").pack(side="left", padx=5)
+            
+            # Выпадающий список параметров
+            param_var = tk.StringVar()
+            param_combo = ttk.Combobox(pair_frame, textvariable=param_var, 
+                                     values=list(self.df.columns), state="readonly", width=15)
+            param_combo.pack(side="left", padx=2)
+            
+            # Выбор цвета
+            color_var = tk.StringVar(value=colors[len(pairs_list) % len(colors)])
+            color_combo = ttk.Combobox(pair_frame, textvariable=color_var, 
+                                     values=colors, state="readonly", width=8)
+            color_combo.pack(side="left", padx=2)
+            
+            # Кнопка удаления
+            def remove_pair():
+                pair_frame.destroy()
+                pairs_list.remove(pair_data)
+            
+            ttk.Button(pair_frame, text="×", command=remove_pair, width=3).pack(side="left", padx=2)
+            
+            # Сохранение данных пары
+            pair_data = {
+                'frame': pair_frame,
+                'time_var': time_var,
+                'param_var': param_var,
+                'color_var': color_var
+            }
+            pairs_list.append(pair_data)
         
-        # Инициализируем отображение
-        update_param_display()
-          # Добавляем кнопку внизу окна в отдельном фрейме
+        # Контейнер для пар
+        pairs_container = ttk.Frame(v11_frame)
+        pairs_container.pack(fill="x", padx=5, pady=5)
+        
+        # Кнопка добавления пары
+        ttk.Button(v11_frame, text="+ Добавить пару", command=add_pair).pack(pady=5)
+
+        # Функция переключения интерфейса
+        def toggle_mode():
+            """Переключение между режимами v1.0 и v1.1"""
+            if mode_var.get() == "v1.0":
+                v10_frame.pack(fill="x", padx=5, pady=5)
+                v11_frame.pack_forget()
+            else:
+                v10_frame.pack_forget()
+                v11_frame.pack(fill="x", padx=5, pady=5)
+        
+        # Привязка переключения режима
+        mode_var.trace("w", lambda *args: toggle_mode())
+        
+        # Изначально показываем v1.0
+        toggle_mode()
+
+        # === КНОПКИ УПРАВЛЕНИЯ ===
         button_frame = ttk.Frame(main_frame)
         button_frame.pack(fill="x", pady=10)
         
-        ttk.Button(
-            button_frame, 
-            text="Применить", 
-            command=lambda: self.apply_selection_v11(mode_var.get(), datetime_var.get(), 
-                                                   param_vars, param_colors_vars, auto_pairs, select_window)
-        ).pack(pady=5)
-        
-        # Улучшенная привязка прокрутки колесиком мыши
-        canvas.bind_all("<MouseWheel>", lambda event, c=canvas: c.yview_scroll(int(-1*(event.delta/120)), "units"))
-        select_window.bind("<Destroy>", lambda event: self.root.unbind_all("<MouseWheel>"))
-    
-    
-    def apply_selection_v11(self, mode, datetime_column, param_vars, param_colors_vars, auto_pairs, window):
-        """Применение выбранных столбцов и отображение графика - версия 1.1"""
-        
-        self.use_paired_mode = (mode == "paired")
-        
-        if self.use_paired_mode:
-            # Парный режим
-            self.time_param_pairs = []
-            self.param_colors = {}
+        def apply_selection():
+            """Применить выбранные настройки"""
+            selected_mode = mode_var.get()
             
-            # Собираем выбранные пары
-            for time_col, param_col in auto_pairs:
-                if param_col in param_vars and param_vars[param_col].get():
-                    self.time_param_pairs.append((time_col, param_col))
-                    self.param_colors[param_col] = param_colors_vars[param_col].get()
-            
-            if not self.time_param_pairs:
-                tk.messagebox.showwarning("Предупреждение", "Не выбрано ни одной пары для отображения")
-                return
+            if selected_mode == "v1.0":
+                # Режим v1.0 - старая логика
+                selected_params = {}
+                selected_colors = {}
                 
-            # Устанавливаем временной диапазон на основе всех пар
-            if self.timeline_manager:
-                min_time, max_time = self.timeline_manager.get_time_range(self.df, self.time_param_pairs)
-                if min_time and max_time:
-                    self.start_date_entry.delete(0, tk.END)
-                    self.start_date_entry.insert(0, min_time.strftime("%Y-%m-%d %H:%M:%S"))
-                    self.end_date_entry.delete(0, tk.END)
-                    self.end_date_entry.insert(0, max_time.strftime("%Y-%m-%d %H:%M:%S"))
-            
-        else:
-            # Простой режим (совместимость с v1.0)
-            self.datetime_column = datetime_column
-            
-            # Проверяем что выбран столбец даты/времени
-            if not self.datetime_column:
-                tk.messagebox.showerror("Ошибка", "Не выбран столбец с датой и временем.")
-                return
-            
-            # Преобразуем столбец с датой/временем
-            try:
-                self.df[self.datetime_column] = pd.to_datetime(self.df[self.datetime_column])
-            except Exception as e:
-                tk.messagebox.showerror("Ошибка преобразования", 
-                                      f"Ошибка при преобразовании столбца даты/времени: {str(e)}")
-                return
-            
-            # Получаем выбранные параметры
-            self.params = []
-            self.param_colors = {}
-            
-            for col, var in param_vars.items():
-                if var.get() and col != self.datetime_column:
-                    self.params.append(col)
-                    self.param_colors[col] = param_colors_vars[col].get()
-            
-            if not self.params:
-                tk.messagebox.showwarning("Предупреждение", "Не выбрано ни одного параметра для отображения")
-                return
-                  # Устанавливаем начальный временной диапазон
-            min_date = self.df[self.datetime_column].min()
-            max_date = self.df[self.datetime_column].max()
-            
-            self.start_date_entry.delete(0, tk.END)
-            self.start_date_entry.insert(0, min_date.strftime("%Y-%m-%d %H:%M:%S"))
-            self.end_date_entry.delete(0, tk.END)
-            self.end_date_entry.insert(0, max_date.strftime("%Y-%m-%d %H:%M:%S"))
+                for col, var in param_vars.items():
+                    if var.get():
+                        selected_params[col] = True
+                        selected_colors[col] = param_colors_vars[col].get()
+                
+                if not selected_params:
+                    tk.messagebox.showwarning("Предупреждение", "Выберите хотя бы один параметр!")
+                    return
+                
+                if not datetime_var.get():
+                    tk.messagebox.showwarning("Предупреждение", "Выберите столбец времени!")
+                    return
+                
+                # Применяем настройки v1.0
+                self.apply_selection_v10(datetime_var.get(), selected_params, selected_colors, select_window)
+                
+            else:
+                # Режим v1.1 - новая логика с парами
+                if not pairs_list:
+                    tk.messagebox.showwarning("Предупреждение", "Добавьте хотя бы одну пару время → параметр!")
+                    return
+                
+                # Проверка корректности пар
+                valid_pairs = []
+                for pair in pairs_list:
+                    time_col = pair['time_var'].get()
+                    param_col = pair['param_var'].get()
+                    color = pair['color_var'].get()
+                    
+                    if time_col and param_col and time_col != param_col:
+                        valid_pairs.append((time_col, param_col, color))
+                
+                if not valid_pairs:
+                    tk.messagebox.showwarning("Предупреждение", "Настройте корректные пары время → параметр!")
+                    return
+                  # Применяем настройки v1.1
+                self.apply_selection_v11(valid_pairs, select_window)
+        
+        ttk.Button(button_frame, text="OK", command=apply_selection).pack(side="left", padx=5)
+        ttk.Button(button_frame, text="Отмена", command=select_window.destroy).pack(side="left", padx=5)
+
+    def apply_selection_v10(self, datetime_column, selected_params, selected_colors, window):
+        """Применение выбранных столбцов - режим v1.0 (совместимость)"""
+        # Устанавливаем простой режим
+        self.use_paired_mode = False
+        self.datetime_column = datetime_column
+        
+        # Проверяем что выбран столбец даты/времени
+        if not self.datetime_column:
+            tk.messagebox.showerror("Ошибка", "Не выбран столбец с датой и временем.")
+            return
+        
+        # Преобразуем столбец с датой/временем
+        try:
+            self.df[self.datetime_column] = pd.to_datetime(self.df[self.datetime_column])
+        except Exception as e:
+            tk.messagebox.showerror("Ошибка преобразования", 
+                                  f"Ошибка при преобразовании столбца даты/времени: {str(e)}")
+            return
+        
+        # Получаем выбранные параметры
+        self.params = []
+        self.param_colors = {}
+        
+        for col, selected in selected_params.items():
+            if selected and col != self.datetime_column:
+                self.params.append(col)
+                self.param_colors[col] = selected_colors[col]
+        
+        if not self.params:
+            tk.messagebox.showwarning("Предупреждение", "Не выбрано ни одного параметра для отображения")
+            return
+        
+        # Устанавливаем начальный временной диапазон
+        min_date = self.df[self.datetime_column].min()
+        max_date = self.df[self.datetime_column].max()
+        
+        self.start_date_entry.delete(0, tk.END)
+        self.start_date_entry.insert(0, min_date.strftime("%Y-%m-%d %H:%M:%S"))
+        self.end_date_entry.delete(0, tk.END)
+        self.end_date_entry.insert(0, max_date.strftime("%Y-%m-%d %H:%M:%S"))
         
         window.destroy()
         self.update_plot()
-    
+
+    def apply_selection_v11(self, valid_pairs, window):
+        """Применение выбранных пар - режим v1.1 (парная привязка)"""
+        # Устанавливаем парный режим
+        self.use_paired_mode = True
+        self.time_param_pairs = []
+        self.param_colors = {}
+        
+        # Обрабатываем пары
+        for time_col, param_col, color in valid_pairs:
+            # Преобразуем столбец времени
+            try:
+                self.df[time_col] = pd.to_datetime(self.df[time_col])
+            except Exception as e:
+                tk.messagebox.showerror("Ошибка преобразования", 
+                                      f"Ошибка при преобразовании столбца времени '{time_col}': {str(e)}")
+                return
+            
+            self.time_param_pairs.append((time_col, param_col))
+            self.param_colors[param_col] = color
+        
+        # Создаем объединенную временную шкалу
+        if self.time_param_pairs:
+            combined_timeline = self.create_combined_timeline()
+            if combined_timeline is not None:
+                min_date = combined_timeline.index.min()
+                max_date = combined_timeline.index.max()
+                
+                self.start_date_entry.delete(0, tk.END)
+                self.start_date_entry.insert(0, min_date.strftime("%Y-%m-%d %H:%M:%S"))
+                self.end_date_entry.delete(0, tk.END)
+                self.end_date_entry.insert(0, max_date.strftime("%Y-%m-%d %H:%M:%S"))
+        
+        window.destroy()
+        self.update_plot()
+
+    def create_combined_timeline(self):
+        """Создание объединенной временной шкалы из всех пар время-параметр"""
+        if not self.time_param_pairs:
+            return None
+        
+        try:
+            # Собираем все данные в общий DataFrame
+            all_data = []
+            
+            for time_col, param_col in self.time_param_pairs:
+                # Извлекаем данные пары
+                pair_data = self.df[[time_col, param_col]].dropna()
+                if not pair_data.empty:
+                    # Переименовываем колонки для унификации
+                    pair_data = pair_data.rename(columns={time_col: 'timestamp', param_col: param_col})
+                    pair_data = pair_data.set_index('timestamp')
+                    all_data.append(pair_data)
+            
+            if not all_data:
+                return None            # Объединяем все данные по временной метке
+            combined_df = pd.concat(all_data, axis=1, sort=True)
+            
+            return combined_df
+            
+        except Exception as e:
+            print(f"Ошибка создания объединенной временной шкалы: {e}")
+            return None
+
     def apply_selection(self, datetime_column, param_vars, param_colors_vars, window):
         """Старая функция для обратной совместимости"""
-        # Перенаправляем на новую функцию в простом режиме
-        self.apply_selection_v11("simple", datetime_column, param_vars, param_colors_vars, [], window)
+        # Преобразуем param_vars в формат для apply_selection_v10        selected_params = {}
+        selected_colors = {}
         
+        for col, var in param_vars.items():
+            if var.get():
+                selected_params[col] = True
+                selected_colors[col] = param_colors_vars[col].get()
+        
+        # Перенаправляем на новую функцию v1.0
+        self.apply_selection_v10(datetime_column, selected_params, selected_colors, window)
+
     def update_plot(self):
-        """Обновление графика с выбранными параметрами"""
-        if self.df is None or not self.params:
+        """Обновление графика с выбранными параметрами - поддержка v1.0 и v1.1"""
+        # Проверяем наличие данных
+        if self.df is None:
             return
+        
+        # Проверяем режим работы
+        if self.use_paired_mode:
+            if not self.time_param_pairs:
+                return
+        else:
+            if not hasattr(self, 'params') or not self.params:
+                return
         
         # Очищаем ссылки на старые виджеты параметров
         if hasattr(self, 'param_value_labels'):
@@ -479,7 +568,74 @@ class MultiParameterPlotApp:
         try:
             start_date = pd.to_datetime(self.start_date_entry.get())
             end_date = pd.to_datetime(self.end_date_entry.get())
+        except Exception as e:
+            tk.messagebox.showerror("Ошибка", f"Ошибка при анализе диапазона дат: {str(e)}")
+            return
+        
+        if self.use_paired_mode:
+            # Режим v1.1 - парная привязка
+            filtered_pairs = []
             
+            for i, (time_col, param_col) in enumerate(self.time_param_pairs):
+                # Фильтруем данные пары по временному диапазону
+                pair_data = self.df[[time_col, param_col]].dropna()
+                if not pair_data.empty:
+                    mask = (pair_data[time_col] >= start_date) & (pair_data[time_col] <= end_date)
+                    filtered_pair = pair_data[mask]
+                    
+                    if not filtered_pair.empty:
+                        filtered_pairs.append((time_col, param_col, filtered_pair))
+            
+            if not filtered_pairs:
+                tk.messagebox.showwarning("Предупреждение", "Нет данных в выбранном диапазоне")
+                return
+            
+            # Отображаем каждую пару
+            for i, (time_col, param_col, pair_data) in enumerate(filtered_pairs):
+                if i == 0:
+                    ax = self.ax1
+                    ax.set_ylabel(param_col, color=self.param_colors[param_col], fontsize=8)
+                else:
+                    # Создаем новую ось Y для каждого дополнительного параметра
+                    ax = self.ax1.twinx()
+                    ax.spines['right'].set_position(('outward', 40 * (i-1)))
+                    ax.set_ylabel(param_col, color=self.param_colors[param_col], fontsize=8)
+                    self.axes.append(ax)
+                
+                # Отрисовываем линию
+                line, = ax.plot(pair_data[time_col], pair_data[param_col], 
+                              color=self.param_colors[param_col], linewidth=1.5, 
+                              label=f"{param_col} ({time_col})")
+                self.lines.append(line)
+                
+                # Настройка цвета оси и делений
+                ax.tick_params(axis='y', colors=self.param_colors[param_col], labelsize=8)
+                ax.spines['right'].set_color(self.param_colors[param_col])
+                
+                # Добавляем информацию о паре
+                frame = ttk.Frame(self.info_frame, style='Black.TFrame')
+                frame.pack(side="left", padx=10, pady=5)
+                
+                param_label = ttk.Label(frame, text=f"{param_col} ({time_col}):", 
+                                      foreground=self.param_colors[param_col],
+                                      background='black',
+                                      style='Black.TLabel')
+                param_label.pack(side="left")
+                
+                # Создаем метку для значения
+                value_label = ttk.Label(frame, text="--",
+                                      background='black',
+                                      foreground='white',
+                                      style='Black.TLabel')
+                value_label.pack(side="left", padx=5)
+                
+                # Сохраняем ссылку на метку
+                if not hasattr(self, 'param_value_labels'):
+                    self.param_value_labels = {}
+                self.param_value_labels[param_col] = value_label
+        
+        else:
+            # Режим v1.0 - совместимость
             # Фильтруем данные по временному диапазону
             mask = (self.df[self.datetime_column] >= start_date) & (self.df[self.datetime_column] <= end_date)
             filtered_df = self.df[mask]
@@ -487,62 +643,54 @@ class MultiParameterPlotApp:
             if filtered_df.empty:
                 tk.messagebox.showwarning("Предупреждение", "Нет данных в выбранном диапазоне")
                 return
+            
+            # Отображаем каждый параметр
+            for i, param in enumerate(self.params):
+                if i == 0:
+                    ax = self.ax1
+                    ax.set_ylabel(param, color=self.param_colors[param], fontsize=8)
+                else:
+                    # Создаем новую ось Y для каждого дополнительного параметра
+                    ax = self.ax1.twinx()
+                    ax.spines['right'].set_position(('outward', 40 * (i-1)))
+                    ax.set_ylabel(param, color=self.param_colors[param], fontsize=8)
+                    self.axes.append(ax)
                 
-        except Exception as e:
-            tk.messagebox.showerror("Ошибка", f"Ошибка при анализе диапазона дат: {str(e)}")
-            return
-        
-        # Отображаем каждый параметр
-        for i, param in enumerate(self.params):
-            # Изменить в функции update_plot(), когда создаете дополнительные оси:
-            if i == 0:
-                ax = self.ax1
-                ax.set_ylabel(param, color=self.param_colors[param], fontsize=8)  # Уменьшенный размер шрифта
-            else:
-                # Создаем новую ось Y для каждого дополнительного параметра
-                ax = self.ax1.twinx()
+                # Отрисовываем линию
+                line, = ax.plot(filtered_df[self.datetime_column], filtered_df[param], 
+                              color=self.param_colors[param], linewidth=1.5)
+                self.lines.append(line)
                 
-                # Настраиваем позицию оси с меньшим отступом
-                ax.spines['right'].set_position(('outward', 40 * (i-1)))  # Уменьшено с 60 до 40
-                ax.set_ylabel(param, color=self.param_colors[param], fontsize=8)  # Уменьшенный размер шрифта
+                # Настройка цвета оси и делений
+                ax.tick_params(axis='y', colors=self.param_colors[param], labelsize=8)
+                ax.spines['right'].set_color(self.param_colors[param])
                 
-                self.axes.append(ax)
-            
-            # Отрисовываем линию
-            line, = ax.plot(filtered_df[self.datetime_column], filtered_df[param], 
-                          color=self.param_colors[param], linewidth=1.5)
-            self.lines.append(line)
-            
-            # Настройка цвета оси и делений
-            ax.tick_params(axis='y', colors=self.param_colors[param], labelsize=8)  # Уменьшенный размер цифр
-            ax.spines['right'].set_color(self.param_colors[param])
-              # Добавляем информацию о параметре (значение будет обновляться при движении курсора)
-            frame = ttk.Frame(self.info_frame, style='Black.TFrame')
-            frame.pack(side="left", padx=10, pady=5)
-            
-            param_label = ttk.Label(frame, text=f"{param}:", 
-                                  foreground=self.param_colors[param],
-                                  background='black',
-                                  style='Black.TLabel')
-            param_label.pack(side="left")
-            
-            # Создаем метку для значения, которая будет обновляться
-            value_label = ttk.Label(frame, text="--",
-                                  background='black',
-                                  foreground='white',
-                                  style='Black.TLabel')
-            value_label.pack(side="left", padx=5)
-            
-            # Сохраняем ссылку на метку для обновления в on_mouse_move
-            if not hasattr(self, 'param_value_labels'):
-                self.param_value_labels = {}
-            self.param_value_labels[param] = value_label
+                # Добавляем информацию о параметре
+                frame = ttk.Frame(self.info_frame, style='Black.TFrame')
+                frame.pack(side="left", padx=10, pady=5)
+                
+                param_label = ttk.Label(frame, text=f"{param}:", 
+                                      foreground=self.param_colors[param],
+                                      background='black',
+                                      style='Black.TLabel')
+                param_label.pack(side="left")
+                
+                # Создаем метку для значения
+                value_label = ttk.Label(frame, text="--",
+                                      background='black',
+                                      foreground='white',
+                                      style='Black.TLabel')
+                value_label.pack(side="left", padx=5)
+                
+                # Сохраняем ссылку на метку
+                if not hasattr(self, 'param_value_labels'):
+                    self.param_value_labels = {}
+                self.param_value_labels[param] = value_label
         
         # Настройка форматирования оси X (дата)
         self.ax1.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S\n%d.%m.%y'))
         plt.setp(self.ax1.get_xticklabels(), rotation=0)
-        self.ax1.tick_params(axis='x', colors='white', labelsize=8)  # Уменьшенный размер шрифта на оси X        # Настройка заголовка
-        # self.ax1.set_title("Мультипараметрический график", color='white', fontsize=10)  # Уменьшенный заголовок
+        self.ax1.tick_params(axis='x', colors='white', labelsize=8)
         
         # Создание холста Matplotlib
         self.canvas = FigureCanvasTkAgg(self.fig, self.plot_frame)
@@ -556,21 +704,22 @@ class MultiParameterPlotApp:
         
         # Отключение отображения координат в стандартной панели инструментов
         self.toolbar.set_message = lambda s: None
-          # Улучшенная метка для координат - размещаем во всю ширину сверху
+        
+        # Метка для координат
         self.coords_label = tk.Label(
             self.plot_frame, 
             text="", 
             bg='black', 
             fg='white', 
             font=('Courier', 10),
-            anchor='w',  # Выравнивание по левому краю вместо центра
-            justify='left',  # Выравнивание текста по левому краю
-            wraplength=1200,  # Ещё больше увеличенная ширина
-            padx=15,  # Увеличенные отступы по бокам
-            pady=2    # УМЕНЬШЕННЫЙ отступ сверху и снизу (было 8, стало 2)
+            anchor='w',
+            justify='left',
+            wraplength=1200,
+            padx=15,
+            pady=2
         )
         
-        # Позиционируем метку вверху окна, растягивая на всю ширину
+        # Позиционируем метку вверху окна
         self.coords_label.pack(side=tk.TOP, fill=tk.X, before=self.canvas.get_tk_widget())
         
         # Подключение обработчика движения мыши
