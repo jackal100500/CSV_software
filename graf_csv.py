@@ -194,13 +194,13 @@ class MultiParameterPlotApp:
                 self.df = pd.read_excel(file_path)
             else:
                 self.df = pd.read_csv(file_path)
-            
-            # Открываем окно выбора столбцов
+              # Открываем окно выбора столбцов
             self.select_columns()
             
         except Exception as e:
             tk.messagebox.showerror("Ошибка загрузки", f"Ошибка при загрузке файла: {str(e)}")
-      def select_columns(self):
+    
+    def select_columns(self):
         """Открытие окна для выбора столбцов для отображения"""
         select_window = tk.Toplevel(self.root)
         select_window.title("Выбор столбцов для отображения - v1.1")
@@ -233,11 +233,10 @@ class MultiParameterPlotApp:
         datetime_var = tk.StringVar()
         datetime_combo = ttk.Combobox(datetime_frame, textvariable=datetime_var, 
                                     values=list(self.df.columns), state="readonly")
-        datetime_combo.pack(fill="x", pady=2)
-
-        # Улучшенное определение столбца с датой/временем
+        datetime_combo.pack(fill="x", pady=2)        # Улучшенное определение столбца с датой/временем
         for col in self.df.columns:
-            if any(kw in col.lower() for kw in ['date', 'time', 'datetime', 'дата', 'время']):                datetime_combo.set(col)
+            if any(kw in col.lower() for kw in ['date', 'time', 'datetime', 'дата', 'время']):
+                datetime_combo.set(col)
                 break
 
         # === БЛОК: Парный режим (новый в v1.1) ===
@@ -432,8 +431,7 @@ class MultiParameterPlotApp:
             if not self.params:
                 tk.messagebox.showwarning("Предупреждение", "Не выбрано ни одного параметра для отображения")
                 return
-                
-            # Устанавливаем начальный временной диапазон
+                  # Устанавливаем начальный временной диапазон
             min_date = self.df[self.datetime_column].min()
             max_date = self.df[self.datetime_column].max()
             
@@ -445,7 +443,7 @@ class MultiParameterPlotApp:
         window.destroy()
         self.update_plot()
     
-      def apply_selection(self, datetime_column, param_vars, param_colors_vars, window):
+    def apply_selection(self, datetime_column, param_vars, param_colors_vars, window):
         """Старая функция для обратной совместимости"""
         # Перенаправляем на новую функцию в простом режиме
         self.apply_selection_v11("simple", datetime_column, param_vars, param_colors_vars, [], window)
