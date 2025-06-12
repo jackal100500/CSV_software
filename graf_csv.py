@@ -843,74 +843,135 @@ class MultiParameterPlotApp:
                 
                 # Начинаем с времени с фиксированной шириной
                 coord_parts = [f"Время: {date_str:<20}"]
-                
-                # Найдем ближайшую точку во временном ряду
-                if self.df is not None and self.datetime_column is not None and hasattr(self, 'params') and self.params:
+                  # Найдем ближайшую точку во временном ряду
+                if self.df is not None:
                     try:
                         # Получаем текущий временной диапазон для поиска только в отфильтрованных данных
                         start_date = pd.to_datetime(self.start_date_entry.get())
                         end_date = pd.to_datetime(self.end_date_entry.get())
                         
-                        # Фильтруем данные по временному диапазону
-                        mask = (self.df[self.datetime_column] >= start_date) & (self.df[self.datetime_column] <= end_date)
-                        filtered_df = self.df[mask]
+                        param_values = []
+                        closest_x = x_coord  # По умолчанию используем позицию курсора
                         
-                        if not filtered_df.empty:
-                            # Преобразуем координату X в формат timestamp
-                            timestamp = date_coord.timestamp()
-                            
-                            # Преобразуем столбец даты/времени в timestamp для поиска ближайшей точки
-                            timestamps = filtered_df[self.datetime_column].apply(lambda x: x.timestamp())
-                            
-                            # Находим индекс ближайшей точки
-                            closest_idx = (timestamps - timestamp).abs().idxmin()
-                            
-                            # Получаем точное время ближайшей точки для более точного позиционирования линии
-                            closest_time = filtered_df.loc[closest_idx, self.datetime_column]
-                            closest_x = mdates.date2num(closest_time)
-                            
-                            # Рисуем СЕРУЮ ПУНКТИРНУЮ вертикальную линию курсора
-                            self.cursor_line = event.inaxes.axvline(x=closest_x, color='gray', linestyle='--', 
-                                                                   linewidth=1.5, alpha=0.8)
-                            
-                            # Собираем значения всех параметров в этой точке с фиксированной шириной
-                            param_values = []
-                            for param in self.params:
-                                if param in filtered_df.columns:
-                                    value = filtered_df.loc[closest_idx, param]
-                                    if pd.notna(value):
-                                        # Используем фиксированную ширину для названия параметра и значения
-                                        param_short = param[:15]  # Обрезаем длинные названия
-                                        param_text = f"{param_short:<15}: {value:>8.2f}"
-                                        param_values.append(param_text)
+                        if self.use_paired_mode:
+                            # Режим v1.1 - парная привязка
+                            if hasattr(self, 'time_param_pairs') and self.time_param_pairs:
+                                # Преобразуем координату X в формат timestamp
+                                timestamp = date_coord.timestamp()
+                                
+                                # Для каждой пары время-параметр находим ближайшую точку
+                                for time_col, param_col in self.time_param_pairs:
+                                    # Фильтруем данные пары по временному диапазону
+                                    pair_data = self.df[[time_col, param_col]].dropna()
+                                    if not pair_data.empty:
+                                        mask = (pair_data[time_col] >= start_date) & (pair_data[time_col] <= end_date)
+                                        filtered_pair = pair_data[mask]
                                         
-                                        # Обновляем значение в информационном блоке
-                                        if hasattr(self, 'param_value_labels') and param in self.param_value_labels:
-                                            try:
-                                                # Проверяем, что виджет еще существует
-                                                if self.param_value_labels[param].winfo_exists():
-                                                    self.param_value_labels[param].config(text=f"{value:.2f}")
-                                            except tk.TclError:
-                                                # Виджет был уничтожен, удаляем его из словаря
-                                                del self.param_value_labels[param]
-                                    else:
-                                        param_short = param[:15]
-                                        param_text = f"{param_short:<15}: {'н/д':>8}"
-                                        param_values.append(param_text)
+                                        if not filtered_pair.empty:
+                                            # Преобразуем столбец времени в timestamp для поиска ближайшей точки
+                                            timestamps = filtered_pair[time_col].apply(lambda x: x.timestamp())
+                                            
+                                            # Находим индекс ближайшей точки в этой паре
+                                            closest_idx = (timestamps - timestamp).abs().idxmin()
+                                            
+                                            # Получаем значение параметра
+                                            value = filtered_pair.loc[closest_idx, param_col]
+                                            if pd.notna(value):
+                                                param_short = param_col[:15]
+                                                param_text = f"{param_short:<15}: {value:>8.2f}"
+                                                param_values.append(param_text)
+                                                  # Обновляем значение в информационном блоке
+                                                if hasattr(self, 'param_value_labels') and param_col in self.param_value_labels:
+                                                    try:
+                                                        if self.param_value_labels[param_col].winfo_exists():
+                                                            self.param_value_labels[param_col].config(text=f"{value:.2f}")
+                                                    except tk.TclError:
+                                                        del self.param_value_labels[param_col]
+                                            else:
+                                                param_short = param_col[:15]
+                                                param_text = f"{param_short:<15}: {'н/д':>8}"
+                                                param_values.append(param_text)
+                                                
+                                                if hasattr(self, 'param_value_labels') and param_col in self.param_value_labels:
+                                                    try:
+                                                        if self.param_value_labels[param_col].winfo_exists():
+                                                            self.param_value_labels[param_col].config(text="н/д")
+                                                    except tk.TclError:
+                                                        del self.param_value_labels[param_col]
+                                
+                                # Для позиционирования линии курсора используем объединенную временную шкалу
+                                if self.time_param_pairs:
+                                    # Создаем объединенную временную шкалу из всех пар
+                                    combined_timeline = self.create_combined_timeline()
+                                    
+                                    if combined_timeline is not None and not combined_timeline.empty:
+                                        # Фильтруем объединенную временную шкалу по диапазону
+                                        timeline_index = combined_timeline.index
+                                        mask = (timeline_index >= start_date) & (timeline_index <= end_date)
+                                        filtered_timeline = timeline_index[mask]
                                         
-                                        # Обновляем значение в информационном блоке
-                                        if hasattr(self, 'param_value_labels') and param in self.param_value_labels:
-                                            try:
-                                                # Проверяем, что виджет еще существует
-                                                if self.param_value_labels[param].winfo_exists():
-                                                    self.param_value_labels[param].config(text="н/д")
-                                            except tk.TclError:
-                                                # Виджет был уничтожен, удаляем его из словаря
-                                                del self.param_value_labels[param]
-                            
-                            # Добавляем параметры с увеличенными отступами
-                            if param_values:
-                                coord_parts.extend(param_values)
+                                        if not filtered_timeline.empty:
+                                            # Ищем ближайшую точку в объединенной временной шкале
+                                            timestamps = pd.Series([t.timestamp() for t in filtered_timeline])
+                                            closest_idx = (timestamps - timestamp).abs().idxmin()
+                                            closest_time = filtered_timeline[timestamps.index[closest_idx]]
+                                            closest_x = mdates.date2num(closest_time)
+                        
+                        else:
+                            # Режим v1.0 - совместимость
+                            if self.datetime_column is not None and hasattr(self, 'params') and self.params:
+                                # Фильтруем данные по временному диапазону
+                                mask = (self.df[self.datetime_column] >= start_date) & (self.df[self.datetime_column] <= end_date)
+                                filtered_df = self.df[mask]
+                                
+                                if not filtered_df.empty:
+                                    # Преобразуем координату X в формат timestamp
+                                    timestamp = date_coord.timestamp()
+                                    
+                                    # Преобразуем столбец даты/времени в timestamp для поиска ближайшей точки
+                                    timestamps = filtered_df[self.datetime_column].apply(lambda x: x.timestamp())
+                                    
+                                    # Находим индекс ближайшей точки
+                                    closest_idx = (timestamps - timestamp).abs().idxmin()
+                                    
+                                    # Получаем точное время ближайшей точки для более точного позиционирования линии
+                                    closest_time = filtered_df.loc[closest_idx, self.datetime_column]
+                                    closest_x = mdates.date2num(closest_time)
+                                    
+                                    # Собираем значения всех параметров в этой точке
+                                    for param in self.params:
+                                        if param in filtered_df.columns:
+                                            value = filtered_df.loc[closest_idx, param]
+                                            if pd.notna(value):
+                                                param_short = param[:15]
+                                                param_text = f"{param_short:<15}: {value:>8.2f}"
+                                                param_values.append(param_text)
+                                                
+                                                # Обновляем значение в информационном блоке
+                                                if hasattr(self, 'param_value_labels') and param in self.param_value_labels:
+                                                    try:
+                                                        if self.param_value_labels[param].winfo_exists():
+                                                            self.param_value_labels[param].config(text=f"{value:.2f}")
+                                                    except tk.TclError:
+                                                        del self.param_value_labels[param]
+                                            else:
+                                                param_short = param[:15]
+                                                param_text = f"{param_short:<15}: {'н/д':>8}"
+                                                param_values.append(param_text)
+                                                
+                                                if hasattr(self, 'param_value_labels') and param in self.param_value_labels:
+                                                    try:
+                                                        if self.param_value_labels[param].winfo_exists():
+                                                            self.param_value_labels[param].config(text="н/д")
+                                                    except tk.TclError:
+                                                        del self.param_value_labels[param]
+                        
+                        # Рисуем СЕРУЮ ПУНКТИРНУЮ вертикальную линию курсора
+                        self.cursor_line = event.inaxes.axvline(x=closest_x, color='gray', linestyle='--', 
+                                                               linewidth=1.5, alpha=0.8)
+                          # Добавляем параметры с увеличенными отступами
+                        if param_values:
+                            coord_parts.extend(param_values)
                     
                     except Exception as inner_e:
                         print(f"Ошибка при получении значений параметров: {inner_e}")
