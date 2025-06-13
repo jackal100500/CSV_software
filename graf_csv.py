@@ -1141,16 +1141,22 @@ class MultiParameterPlotApp:
             ydata - new_y_range * y_offset_bottom,
             ydata + new_y_range * y_offset_top
         ]
-        
-        # Применяем новые пределы
-        event.inaxes.set_xlim(new_xlim)
-        event.inaxes.set_ylim(new_ylim)
-        
-        # Обновляем все связанные оси Y (для мультипараметрического графика)
-        if hasattr(self, 'axes') and len(self.axes) > 1:
-            for ax in self.axes[1:]:  # Пропускаем основную ось
-                ax.set_xlim(new_xlim)  # Устанавливаем тот же X диапазон для всех осей
-        
+
+        # Удаляем старое применение пределов Y и специфическое обновление связанных осей X.
+        # Вместо этого применим new_xlim ко всем осям и автомасштабируем их Y.
+        # event.inaxes.set_xlim(new_xlim) # Эта строка будет не нужна, так как цикл ниже обработает все оси
+        # event.inaxes.set_ylim(new_ylim) # Эту строку удаляем
+
+        # if hasattr(self, 'axes') and len(self.axes) > 1: # Этот блок также заменяется
+        #     for ax in self.axes[1:]:
+        #         ax.set_xlim(new_xlim)
+
+        # Новый код для обновления всех осей:
+        if hasattr(self, 'axes') and self.axes:
+            for ax_current in self.axes:
+                ax_current.set_xlim(new_xlim) # Применяем новый X-диапазон, центрированный на курсоре
+                ax_current.autoscale_view(scalex=False, scaley=True) # Автомасштабируем Y для показа всех данных
+
         # Перерисовываем график
         self.canvas.draw_idle()
 
