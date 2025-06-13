@@ -378,10 +378,13 @@ class MultiParameterPlotApp:
                 'color_var': color_var
             }
             pairs_list.append(pair_data)
-        
-        # Контейнер для пар
+          # Контейнер для пар
         pairs_container = ttk.Frame(v11_frame)
         pairs_container.pack(fill="x", padx=5, pady=5)
+        
+        # Автоматически создаем 5 пар при инициализации
+        for i in range(5):
+            add_pair()
         
         # Кнопка добавления пары
         ttk.Button(v11_frame, text="+ Добавить пару", command=add_pair).pack(pady=5)
