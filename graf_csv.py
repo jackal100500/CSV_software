@@ -332,16 +332,15 @@ class MultiParameterPlotApp:
 
         # === РЕЖИМ v1.1 (ПАРНАЯ ПРИВЯЗКА) ===
         v11_frame = ttk.LabelFrame(main_frame, text="Режим v1.1 - Пары время → параметр:")
-        v11_frame.pack(fill="x", padx=5, pady=5)
-
-        # Список для хранения пар
+        v11_frame.pack(fill="x", padx=5, pady=5)        # Список для хранения пар
         pairs_list = []
         
-        def add_pair():
+        def add_pair(auto_fill_index=None):
             """Добавить новую пару время → параметр"""
             pair_frame = ttk.Frame(pairs_container)
             pair_frame.pack(fill="x", pady=2)
-              # Выпадающий список времени
+            
+            # Выпадающий список времени
             time_var = tk.StringVar()
             time_combo = ttk.Combobox(pair_frame, textvariable=time_var, 
                                     values=list(self.df.columns), state="readonly", width=15)
@@ -355,6 +354,20 @@ class MultiParameterPlotApp:
             param_combo = ttk.Combobox(pair_frame, textvariable=param_var, 
                                      values=list(self.df.columns), state="readonly", width=15)
             param_combo.pack(side="left", padx=2)
+            
+            # Автозаполнение колонками, если указан индекс
+            if auto_fill_index is not None and auto_fill_index < len(self.df.columns):
+                columns = list(self.df.columns)
+                
+                # Для времени берем колонку по индексу (если четный) или следующую
+                time_idx = auto_fill_index * 2 if auto_fill_index * 2 < len(columns) else auto_fill_index
+                if time_idx < len(columns):
+                    time_var.set(columns[time_idx])
+                
+                # Для параметра берем следующую колонку
+                param_idx = time_idx + 1 if time_idx + 1 < len(columns) else (time_idx - 1 if time_idx > 0 else time_idx)
+                if param_idx < len(columns) and param_idx != time_idx:
+                    param_var.set(columns[param_idx])
             
             # Выбор цвета с индикатором
             color_var = tk.StringVar(value=colors[len(pairs_list) % len(colors)])
@@ -381,10 +394,9 @@ class MultiParameterPlotApp:
           # Контейнер для пар
         pairs_container = ttk.Frame(v11_frame)
         pairs_container.pack(fill="x", padx=5, pady=5)
-        
-        # Автоматически создаем 5 пар при инициализации
+          # Автоматически создаем 5 пар при инициализации с автозаполнением
         for i in range(5):
-            add_pair()
+            add_pair(auto_fill_index=i)
         
         # Кнопка добавления пары
         ttk.Button(v11_frame, text="+ Добавить пару", command=add_pair).pack(pady=5)
