@@ -56,28 +56,28 @@ class MultiParameterPlotApp:
         self.pan_start_ylim = None
         
         # Создание фрейма для временного диапазона
-        self.time_frame = ttk.LabelFrame(root, text="Временной диапазон")
+        self.time_frame = ttk.LabelFrame(root, text="File Upload and Time Range")
         self.time_frame.pack(fill="x", padx=10, pady=5)
         
         # Кнопка загрузки данных (теперь в временном фрейме)
-        self.load_button = ttk.Button(self.time_frame, text="Загрузить файл", command=self.load_data)
+        self.load_button = ttk.Button(self.time_frame, text="Upload file", command=self.load_data)
         self.load_button.grid(row=0, column=0, padx=5, pady=5)
         
         # Поля для ввода временного диапазона
-        ttk.Label(self.time_frame, text="Начало:").grid(row=0, column=1, padx=5, pady=5)
+        ttk.Label(self.time_frame, text="Start:").grid(row=0, column=1, padx=5, pady=5)
         self.start_date_entry = ttk.Entry(self.time_frame, width=20)
         self.start_date_entry.grid(row=0, column=2, padx=5, pady=5)
         
-        ttk.Label(self.time_frame, text="Конец:").grid(row=0, column=3, padx=5, pady=5)
+        ttk.Label(self.time_frame, text="Finish:").grid(row=0, column=3, padx=5, pady=5)
         self.end_date_entry = ttk.Entry(self.time_frame, width=20)
         self.end_date_entry.grid(row=0, column=4, padx=5, pady=5)
         
         # Кнопка применения временного диапазона
-        self.apply_time_button = ttk.Button(self.time_frame, text="Применить", command=self.update_time_range)
+        self.apply_time_button = ttk.Button(self.time_frame, text="Apply", command=self.update_time_range)
         self.apply_time_button.grid(row=0, column=5, padx=5, pady=5)
         
         # Кнопка сброса временного диапазона
-        self.reset_time_button = ttk.Button(self.time_frame, text="Сбросить", command=self.reset_time_range)
+        self.reset_time_button = ttk.Button(self.time_frame, text="Reset", command=self.reset_time_range)
         self.reset_time_button.grid(row=0, column=6, padx=5, pady=5)
         
         # Предустановленные временные диапазоны
@@ -200,9 +200,9 @@ class MultiParameterPlotApp:
             tk.messagebox.showerror("Ошибка загрузки", f"Ошибка при загрузке файла: {str(e)}")
     
     def select_columns(self):
-        """Открытие окна для выбора столбцов для отображения - v1.1"""
+        """Открытие окна для выбора столбцов для отображения"""
         select_window = tk.Toplevel(self.root)
-        select_window.title("Выбор столбцов для отображения - v1.1")
+        select_window.title("Выбор столбцов для отображения")
         select_window.geometry("600x700")
 
         # Основной фрейм
@@ -210,25 +210,25 @@ class MultiParameterPlotApp:
         main_frame.pack(fill="both", expand=True, padx=10, pady=10)
 
         # === ВЫБОР РЕЖИМА РАБОТЫ ===
-        mode_frame = ttk.LabelFrame(main_frame, text="Режим работы:")
+        mode_frame = ttk.LabelFrame(main_frame, text="Select Mode:")
         mode_frame.pack(fill="x", padx=5, pady=5)
         
         mode_var = tk.StringVar(value="v1.0")
         
-        ttk.Radiobutton(mode_frame, text="Режим v1.0 (один столбец времени для всех)", 
+        ttk.Radiobutton(mode_frame, text="Режим v1.0 (один столбец времени для выбранных параметров)", 
                        variable=mode_var, value="v1.0").pack(anchor="w", padx=10, pady=2)
         ttk.Radiobutton(mode_frame, text="Режим v1.1 (парная привязка время → параметр)", 
                        variable=mode_var, value="v1.1").pack(anchor="w", padx=10, pady=2)
 
         # === РЕЖИМ v1.0 (СОВМЕСТИМОСТЬ) ===
-        v10_frame = ttk.LabelFrame(main_frame, text="Режим v1.0:")
+        v10_frame = ttk.LabelFrame(main_frame, text="Режим v1.0")
         v10_frame.pack(fill="x", padx=5, pady=5)
 
         # Выбор столбца времени
         datetime_frame = ttk.Frame(v10_frame)
         datetime_frame.pack(fill="x", padx=5, pady=5)
         
-        ttk.Label(datetime_frame, text="Столбец времени:").pack(anchor="w")
+        ttk.Label(datetime_frame, text="Столбец времени (выберите столбец для оси X):").pack(anchor="w")
         datetime_var = tk.StringVar()
         datetime_combo = ttk.Combobox(datetime_frame, textvariable=datetime_var, 
                                     values=list(self.df.columns), state="readonly")
@@ -238,11 +238,12 @@ class MultiParameterPlotApp:
         for col in self.df.columns:
             if any(kw in col.lower() for kw in ['date', 'time', 'datetime', 'дата', 'время']):
                 datetime_combo.set(col)
-                break        # Выбор параметров
+                break        
+        # Выбор параметров
         params_frame = ttk.Frame(v10_frame)
         params_frame.pack(fill="both", expand=True, padx=5, pady=5)
         
-        ttk.Label(params_frame, text="Параметры для отображения:").pack(anchor="w")
+        ttk.Label(params_frame, text="Выберите параметры для отображения по оси Y:").pack(anchor="w")
         
         param_vars = {}
         param_colors_vars = {}
@@ -308,7 +309,19 @@ class MultiParameterPlotApp:
         
         params_canvas.pack(side="left", fill="both", expand=True)
         params_scrollbar.pack(side="right", fill="y")
-          # Создание чекбоксов для каждого столбца (кроме времени)
+        
+         # Функция для обработки прокрутки колесиком мыши в списке параметров
+        def _on_mousewheel_params_list(event):
+            # event.delta для Windows обычно +/-120
+            # params_canvas.yview_scroll ожидает -1 для прокрутки вверх, 1 для прокрутки вниз
+            params_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+
+        # Привязка события прокрутки к холсту и основному фрейму внутри холста
+        params_canvas.bind("<MouseWheel>", _on_mousewheel_params_list)
+        params_scrollable_frame.bind("<MouseWheel>", _on_mousewheel_params_list)       
+        
+                
+        # Создание чекбоксов для каждого столбца (кроме времени)
         for i, col in enumerate(self.df.columns):
             if col != datetime_var.get():
                 # Создаем чекбокс для выбора параметра
@@ -332,7 +345,18 @@ class MultiParameterPlotApp:
 
         # === РЕЖИМ v1.1 (ПАРНАЯ ПРИВЯЗКА) ===
         v11_frame = ttk.LabelFrame(main_frame, text="Режим v1.1 - Пары время → параметр:")
-        v11_frame.pack(fill="x", padx=5, pady=5)        # Список для хранения пар
+        v11_frame.pack(fill="x", padx=5, pady=5)        
+        
+        # Добавляем поясняющий текст под заголовком LabelFrame
+        v11_explanation = ttk.Label(v11_frame, 
+                                    text="Этот режим предназначен для таблиц, где каждый параметр имеет свою колонку времени.\n"
+                                         "Выберите пары 'колонка времени' → 'колонка параметра'.",
+                                    justify="left", 
+                                    wraplength=550) # Подберите wraplength по ширине окна
+        v11_explanation.pack(fill="x", padx=10, pady=(0, 5)) # Отступ сверху 0, снизу 5
+
+
+        # Список для хранения пар
         pairs_list = []
         
         def add_pair(auto_fill_index=None):
