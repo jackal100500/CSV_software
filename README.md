@@ -206,7 +206,6 @@ Multi-Parameter Data Analyzer v1.1/
 ├── 📄 graf_csv.py                           # Основное приложение v1.1
 ├── 📋 requirements.txt                      # Python зависимости
 ├── 📖 README.md                             # Основная документация (этот файл)
-├── 📄 PROJECT_STRUCTURE.md                  # Описание структуры проекта
 ├── 📁 .git/                               # Git репозиторий
 ├── 📄 .gitignore                           # Git исключения
 ├── 📁 venv_v2/                             # Виртуальная среда Python

@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 import tkinter as tk
 from tkinter import filedialog, ttk
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
+import webbrowser
 
 # Импортируем наш SimpleTimelineManager
 try:
@@ -1223,7 +1224,6 @@ GitHub: https://github.com/jackal100500/CSV_software.git
 
     def open_github(self):
         """Открытие GitHub репозитория"""
-        import webbrowser
         webbrowser.open("https://github.com/jackal100500/CSV_software.git")
         
 # Запуск приложения

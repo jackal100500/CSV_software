@@ -1,5 +1,19 @@
-pandas>=1.3.0
-matplotlib>=3.5.0
-numpy>=1.21.0
-openpyxl>=3.0.9
+# Multi-Parameter Data Analyzer v1.1 - Dependencies
+# Updated: June 13, 2025
+
+# Core data processing
+pandas>=2.3.0
+numpy>=2.3.0
+
+# Visualization
+matplotlib>=3.10.3
+
+# Excel file support
+openpyxl>=3.1.5
 xlrd>=2.0.1
+
+# GUI (built-in with Python)
+# tkinter - included with Python
+
+# Build tool (development only)
+# pyinstaller>=6.14.1
