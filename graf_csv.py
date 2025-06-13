@@ -238,9 +238,7 @@ class MultiParameterPlotApp:
         for col in self.df.columns:
             if any(kw in col.lower() for kw in ['date', 'time', 'datetime', 'дата', 'время']):
                 datetime_combo.set(col)
-                break
-
-        # Выбор параметров
+                break        # Выбор параметров
         params_frame = ttk.Frame(v10_frame)
         params_frame.pack(fill="both", expand=True, padx=5, pady=5)
         
@@ -250,8 +248,53 @@ class MultiParameterPlotApp:
         param_colors_vars = {}
         colors = ['red', 'blue', 'green', 'orange', 'purple', 'brown', 'pink', 'gray', 'olive', 'cyan']
         
+        # Словарь с RGB значениями цветов для отображения
+        colors_with_rgb = {
+            'red': '#FF0000',
+            'blue': '#0000FF',
+            'green': '#00FF00', 
+            'orange': '#FFA500',
+            'purple': '#800080',
+            'brown': '#A52A2A',
+            'pink': '#FFC0CB',
+            'gray': '#808080',
+            'olive': '#808000',
+            'cyan': '#00FFFF',
+            'magenta': '#FF00FF',
+            'yellow': '#FFFF00',
+            'black': '#000000',
+            'white': '#FFFFFF'
+        }
+        
+        # Функция для создания комбо-бокса с цветным индикатором
+        def create_color_combobox(parent, color_var, width=10):
+            """Создаёт комбо-бокс с цветным индикатором"""
+            frame = ttk.Frame(parent)
+            
+            # Создаем комбо-бокс
+            combo = ttk.Combobox(frame, textvariable=color_var, 
+                               values=list(colors_with_rgb.keys()), state="readonly", width=width)
+            combo.pack(side="right", padx=(5, 0))
+            
+            # Создаем цветной индикатор (Canvas)
+            color_indicator = tk.Canvas(frame, width=16, height=16, bg=colors_with_rgb.get(color_var.get(), '#FFFFFF'))
+            color_indicator.pack(side="right", padx=(0, 5))
+            
+            # Функция обновления индикатора при изменении выбора
+            def update_color(event=None):
+                color_name = color_var.get()
+                color_indicator.config(bg=colors_with_rgb.get(color_name, '#FFFFFF'))
+            
+            # Привязываем обновление цвета к событию выбора
+            combo.bind("<<ComboboxSelected>>", update_color)
+            
+            # Инициализируем индикатор при создании
+            update_color()
+            
+            return frame
+        
         # Скроллируемый фрейм для параметров
-        params_canvas = tk.Canvas(params_frame, height=150)
+        params_canvas = tk.Canvas(params_frame, height=400)
         params_scrollbar = ttk.Scrollbar(params_frame, orient="vertical", command=params_canvas.yview)
         params_scrollable_frame = ttk.Frame(params_canvas)
         
@@ -265,22 +308,27 @@ class MultiParameterPlotApp:
         
         params_canvas.pack(side="left", fill="both", expand=True)
         params_scrollbar.pack(side="right", fill="y")
-        
-        # Создание чекбоксов для каждого столбца (кроме времени)
+          # Создание чекбоксов для каждого столбца (кроме времени)
         for i, col in enumerate(self.df.columns):
             if col != datetime_var.get():
-                var = tk.BooleanVar()
+                # Создаем чекбокс для выбора параметра
+                param_frame = ttk.Frame(params_scrollable_frame)
+                param_frame.pack(fill="x", pady=2)
+                
+                # Переменная для чекбокса
+                var = tk.BooleanVar(value=False)
                 param_vars[col] = var
                 
-                param_frame = ttk.Frame(params_scrollable_frame)
-                param_frame.pack(fill="x", padx=5, pady=2)
+                # Создаем чекбокс с названием параметра
+                ttk.Checkbutton(param_frame, text=col, variable=var).pack(side="left", padx=5)
                 
-                ttk.Checkbutton(param_frame, text=col, variable=var).pack(side="left")
-                
+                # Переменная для выбора цвета
                 color_var = tk.StringVar(value=colors[i % len(colors)])
                 param_colors_vars[col] = color_var
-                ttk.Combobox(param_frame, textvariable=color_var, values=colors, 
-                           state="readonly", width=10).pack(side="right", padx=(10, 0))
+                
+                # Создаем комбо-бокс с цветным индикатором вместо обычного
+                color_frame = create_color_combobox(param_frame, color_var)
+                color_frame.pack(side="right", padx=(10, 0))
 
         # === РЕЖИМ v1.1 (ПАРНАЯ ПРИВЯЗКА) ===
         v11_frame = ttk.LabelFrame(main_frame, text="Режим v1.1 - Пары время → параметр:")
@@ -293,8 +341,7 @@ class MultiParameterPlotApp:
             """Добавить новую пару время → параметр"""
             pair_frame = ttk.Frame(pairs_container)
             pair_frame.pack(fill="x", pady=2)
-            
-            # Выпадающий список времени
+              # Выпадающий список времени
             time_var = tk.StringVar()
             time_combo = ttk.Combobox(pair_frame, textvariable=time_var, 
                                     values=list(self.df.columns), state="readonly", width=15)
@@ -309,11 +356,12 @@ class MultiParameterPlotApp:
                                      values=list(self.df.columns), state="readonly", width=15)
             param_combo.pack(side="left", padx=2)
             
-            # Выбор цвета
+            # Выбор цвета с индикатором
             color_var = tk.StringVar(value=colors[len(pairs_list) % len(colors)])
-            color_combo = ttk.Combobox(pair_frame, textvariable=color_var, 
-                                     values=colors, state="readonly", width=8)
-            color_combo.pack(side="left", padx=2)
+            
+            # Создаем и размещаем комбо-бокс с цветным индикатором вместо обычного
+            color_frame = create_color_combobox(pair_frame, color_var, width=8)
+            color_frame.pack(side="left", padx=2)
             
             # Кнопка удаления
             def remove_pair():
@@ -1112,19 +1160,20 @@ class MultiParameterPlotApp:
             
             # Возвращаем обычный курсор
             self.canvas.get_tk_widget().config(cursor="")
-            
+
     def show_about(self):
         """Показ информации о программе"""
-        about_text = """Multi-Parameter Data Analyzer v1.0
+        about_text = """Multi-Parameter Data Analyzer v1.1
     
 Профессиональный инструмент для визуализации
 многопараметрических данных из CSV/Excel файлов.
+
+🆕 Новинка v1.1: Парная привязка время → параметр
 
 Разработчик: j15
 GitHub: https://github.com/jackal100500/CSV_software.git
 
 © 2025"""
-    
         tk.messagebox.showinfo("About", about_text)
 
     def open_github(self):
